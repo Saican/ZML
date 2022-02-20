@@ -133,13 +133,13 @@ class FileStream
     }
 
     // Standard (pretty much) Peek(To) functions - these are aware of the line to be on
-    string Peek(int at) { return CharAt(Line, at); }
+    string Peek(int at) { return CharAt(self.Line, at); }
     // Note that "head" is flagged "out", this should be the parser read head
     string PeekTo(int at, int len, out int head)
     {
         string s = "";
         if (at >= 0 && len > 0 &&
-            at < Stream[Line].Length && at + len < Stream[Line].Length)
+            at < Stream[Line].Length && at + len <= Stream[Line].Length)
         {
             for (int i = 0; i < len; i++)
                 s = string.Format("%s%s", s, CharAt(Line, i + at));
@@ -208,11 +208,6 @@ class FileStream
                         false))
                 {
                     // Is there more after?
-                    int cl;
-                    if (c.Length() > 1)
-                        cl = 1;
-                    else
-                        cl = 0;
                     if (j + c.Length() < Stream[i].Length)
                     {
                         from = j + c.Length();
