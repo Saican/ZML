@@ -42,6 +42,7 @@ class ZMLElement
     }
 
     string name;
+    bool Empty() { return (name ~== "zml_empty"); }
 
     ZMLElement Init(string name, string type)
     {

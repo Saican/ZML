@@ -146,12 +146,6 @@ class FileStream
 
             head += len;
         }
-        else if (at > Stream[Line].Length)
-            s = "OOB_at";
-        else if (at + len > Stream[Line].Length)
-            s = "OOB_len";
-        else
-            s = "EOF";
 
         return s;
     }
@@ -160,23 +154,6 @@ class FileStream
     { 
         int head;
         return PeekTo(at, len, head);
-    }
-    // Determines if the peek contents are a valid string or an error flag
-    bool PeekFound(string pt)
-    {
-        if (pt != "OOB_at" && pt != "OOB_len" && pt != "EOF")
-            return true;
-        else
-            return false;
-    }
-
-    string, bool PeekJob(out int reader, int len)
-    {
-        string pt = PeekTo(reader, len, reader);
-        if(PeekFound(pt))
-            return pt, true;
-        else
-            return pt, false;
     }
 
     /*
@@ -202,20 +179,23 @@ class FileStream
             string e = "";
             for (int j = r; j < Stream[i].Length; j++)
             {
+                //console.printf(string.format("Looking for character: %s -- Examining character, line %d, head %d, %s", c, i, j, CharAt(i, j)));
                 if ((CharAt(i, j).ByteAt(0) == c.ByteAt(0)) &&          // Does the first character match?
                     (c.Length() == 2 && j + 1 < Stream[i].Length ?      // Do we need to look for another character?
                         (CharAt(i, j + 1).ByteAt(0) == c.ByteAt(1)) :   // Yes, check next character 
-                        false))
+                        true))                                          // Skip this part of the check
                 {
                     // Is there more after?
                     if (j + c.Length() < Stream[i].Length)
                     {
+                        console.printf("There's more after the terminator");
                         from = j + c.Length();
                         return i;
                     }
                     // No, go to the next line.
                     else
                     {
+                        console.printf("Go to the next line");
                         from = 0;
                         return i + 1;
                     }
