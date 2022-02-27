@@ -73,7 +73,21 @@ class FileStream
     int Lines() { return Stream.Size(); }
     int Line,
         LumpNumber,  // This is basically useless but interesting
-        LumpHash;
+        LumpHash,
+        StreamLength;
+
+    /*
+        Returns the global index in the stream,
+        which is the count of total characters
+        read thus far.
+    */
+    int StreamIndex(int head)
+    {
+        int si = 0;
+        for (int i = 0; i < Line; i++)
+            si += Stream[i].Length;
+        return si + head;
+    }
 
     /*
         https://stackoverflow.com/questions/8317508/hash-function-for-a-string#:~:text=like%20e.g.-,%23define,-A%2054059%20/*%20a
@@ -95,7 +109,28 @@ class FileStream
         return h % c;
     }
 
-    string CharAt(int line, int head) { return Stream[line].Chars[head]; }
+    string CharAt(int line, int head, bool haveTag = false) 
+    { 
+        if (!haveTag)
+            return Stream[line].Chars[head]; 
+        else
+        {
+            console.printf(string.Format("Char At looked at line: %d, head: %d, value: %s", line, head, Stream[line].Chars[head]));
+            //string c = Stream[line].Chars[head];
+            //return c;
+            if (line < Lines() && head < Stream[line].Length)
+            {
+                StreamLine sl = Stream[line];
+                return sl.Chars[head];
+             //   return Stream[line].Chars[head];
+            }
+            else
+            {
+                console.printf("Array Access out of bounds!");
+                return "";
+            }
+        }
+    }
 
     FileStream Init(string RawLump, int LumpNumber, bool mode = false)
     {
@@ -113,12 +148,16 @@ class FileStream
                 l = string.Format("%s%s", l, n);
             else if (l.Length() > 0)
             {
-                StreamLine sl = new("StreamLine").Init(l, tln++);
+                StreamLine sl = new("StreamLine").Init(l, tln++, mode);
                 if (sl)
                     Stream.Push(sl);
                 l = "";
             }
         }
+
+        self.StreamLength = 0;
+        for (int i = 0; i < Stream.Size(); i++)
+            self.StreamLength += Stream[i].Length;
 
         /*console.printf(string.Format("File Stream contains %d lines.  Contents:", Lines()));
         for (int i = 0; i < Lines(); i++)
@@ -133,16 +172,20 @@ class FileStream
     }
 
     // Standard (pretty much) Peek(To) functions - these are aware of the line to be on
-    string Peek(int at) { return CharAt(self.Line, at); }
+    string Peek(int at) { return CharAt(Line, at); }
     // Note that "head" is flagged "out", this should be the parser read head
-    string PeekTo(int at, int len, out int head)
+    string PeekTo(int at, int len, out int head, bool haveTag = false)
     {
         string s = "";
         if (at >= 0 && len > 0 &&
             at < Stream[Line].Length && at + len <= Stream[Line].Length)
         {
+            console.printf(string.Format("PeekTo, at: %d, len: %d, head:%d, Line: %d, Line Length: %d", at, len, head, Line, Stream[Line].Length));
+            //if (!haveTag)
+            //{
             for (int i = 0; i < len; i++)
-                s = string.Format("%s%s", s, CharAt(Line, i + at));
+                s = string.Format("%s%s", s, CharAt(Line, i + at, haveTag));
+            //}
 
             head += len;
         }
@@ -170,7 +213,7 @@ class FileStream
         to the index to pick up at.
     
     */
-    int GetEOB (out int from, string c)
+    int PeekEnd (out int from, string c)
     {
         // Check each line, including this one
         int r = from;

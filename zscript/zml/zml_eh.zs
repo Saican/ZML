@@ -71,6 +71,7 @@ class ZMLHandler : EventHandler
         T_SPECIALCHAR_ASTERISK,
 
         // Context dependent words - this means it matters where in the parser we are when reading these tokens
+        T_WORD_CHAR,
         T_WORD_NAME,
         T_WORD_TYPE,
 
@@ -110,7 +111,7 @@ class ZMLHandler : EventHandler
                 return T_SPECIALCHAR_ASTERISK;
         }
             
-        return T_MORE;
+        return T_WORD_CHAR;
     }
 
     bool IsCodeChar(string el)
@@ -229,13 +230,15 @@ class ZMLHandler : EventHandler
 
             while (t > T_END)  // Signalling 0 will end the loop
             {
-                // "e" is the raw untokenized string - it must be cleared each loop
-                e = "";
-                // Tokeninzing returns something no matter what, either get more string, or error, until it's not that
-                while (t == T_MORE)
+                if (t == T_MORE)
                 {
                     e = string.Format("%s%s", e, file.PeekTo(reader, 1, reader));
                     t = stringToToken();
+
+                    console.printf(string.format("Lexing - contents of e : %s -- t value : %d", e, t));
+
+                    if (t > T_MORE && t != T_WORD_CHAR)
+                        e = "";
                 }
 
                 // Assumming we got a valid token, we can now establish context
@@ -247,6 +250,9 @@ class ZMLHandler : EventHandler
                             ztag = new("ZMLTag").Init("zml_empty", "t_none");
 
                         console.printf(string.format("Hey we got a tag! contents of e: %s, line is: %d, reader is at: %d", e, file.Line, reader));
+                        if (ztag)
+                            console.printf("Created tag node");
+                        //t = -3;
                         break;
                     case T_KEY_ATTRIBUTE:
                         break;
@@ -281,6 +287,26 @@ class ZMLHandler : EventHandler
                         // Have we encountered a backslash?
                         if (bStartComment)
                             bStartBlockComment = true;
+                        break;
+
+                    /*
+                        This is the "there's no other context"...context
+
+                        We are here because no other case makes sense.
+                        So, what is our current context?  What should we be getting?
+                        Is that what we got?  Yes?  Go on.
+                        No?  Um, error.
+
+                    */
+                    case T_WORD_CHAR:
+                        console.printf("Checking buffer for context violation.");
+                        // Should a backslash be encountered, the Comment Context will be set.
+                        // Next parse should have encountered either anoher backslash or an asterisk.
+                        if (bStartComment)
+                            t = T_IDKWHAT_INVALIDCHAR;
+
+                        if ((ztag ? ztag.Empty() : false) && !bFirstQuote)
+                            t = T_IDKWHAT_INVALIDCHAR;
                         break;
                 }
             
@@ -324,10 +350,10 @@ class ZMLHandler : EventHandler
     void Parse_DefLump_Context_BlockComment()
     {
         console.printf("Context Block Comment");
-        // GetEOB will search for the specified closing tag, setting reader in the process.
+        // PeekEnd will search for the specified closing tag, setting reader in the process.
         // The return is the line to move to, however it will return -1 if nothing is found,
         // so we need to check it before setting file.Line.
-        int nextLine = file.GetEOB(reader, "*/");
+        int nextLine = file.PeekEnd(reader, "*/");
         if (nextLine != -1)
             file.Line = nextLine;
         else
@@ -355,7 +381,7 @@ class ZMLHandler : EventHandler
     {
         console.printf("Context Word");
         int ws = reader;
-        int lineCheck = file.GetEOB(reader, w);
+        int lineCheck = file.PeekEnd(reader, w);
         if (lineCheck != -1)
             ztag.name = file.PeekFor(ws, reader - ws - 1);
         else
