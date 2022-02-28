@@ -14,9 +14,18 @@
 */
 class StreamLine
 {
-    int Length, TrueLine;
+    int Length,     // Total number of characters in the array
+        TrueLine;   // This is the actual line number in the file - for error output
+
+    // Each character is stored as a string in the array - be nice to have actual chars
     array<string> Chars;
 
+    /*
+        Works like any other Mid function,
+        but works on the Chars array.
+        Returns a string comprising the given length,
+        starting from the given index.
+    */
     string Mid(int at = 0, int len = 1)
     {
         string s = "";
@@ -24,20 +33,29 @@ class StreamLine
             at < Length && at + len < Length)
         {
             for (int i = 0; i < len; i++)
-                s = string.Format("%s%s", s, Chars[i + at]);
+                s.AppendFormat("%s", Chars[i + at]);
         }
 
         return s;
     }
 
+    /*
+        Returns the entire line as a single string
+    */
     string FullLine()
     {
         string f = "";
         for (int i = 0; i < Length; i++)
-            f = string.Format("%s%s", f, Chars[i]);
+            f.AppendFormat("%s", Chars[i]);
         return f;
     }
 
+    /*
+        Line constructor
+
+        Generally, this system is set to remove whitespace,
+        however if that isn't desired for some reason, set mode to true.
+    */
     StreamLine Init(string Line, int TrueLine, bool mode = false)
     {
         // Put each character of the string into the array - normally remove whitespace
@@ -69,32 +87,43 @@ class StreamLine
 */
 class FileStream
 {
+    // The Stream member contains the textual information of each file
     array<StreamLine> Stream;
+    // Lines() is a wrapper of Stream.Size(), generally used when wanting to know how many lines are in the stream
     int Lines() { return Stream.Size(); }
-    int Line,
-        LumpNumber,  // This is basically useless but interesting
-        LumpHash,
-        StreamLength;
+
+    int Line,           // Line represents which line of the file the reader is on
+        Head,           // Head is ths character read head of the line
+        LumpNumber,     // This is basically useless but interesting - this is the l value from Wads.ReadLump
+        LumpHash,       // This value is calculated by hashing the contents of the lump and is used to eliminate duplicate reads
+        StreamLength;   // This is the total number of characters in the entire stream.
 
     /*
         Returns the global index in the stream,
         which is the count of total characters
         read thus far.
     */
-    int StreamIndex(int head)
+    int StreamIndex()
     {
         int si = 0;
         for (int i = 0; i < Line; i++)
             si += Stream[i].Length;
-        return si + head;
+        return si + Head;
     }
 
     /*
-        https://stackoverflow.com/questions/8317508/hash-function-for-a-string#:~:text=like%20e.g.-,%23define,-A%2054059%20/*%20a
+        https://bit.ly/3sqyUXj
+
+        (Goes to StackOverflow)
 
         Its been a long while since I had a CS class
         that made me write my own hash function,
         so I just borrowed one from the link above.
+
+        Kinda dirty, but it's used to create an ID hash
+        for each file, to be checked during lump read,
+        otherwise the reader makes duplicates for some
+        odd reason.
     
     */
     static int GetLumpHash(string rl)
@@ -109,32 +138,21 @@ class FileStream
         return h % c;
     }
 
-    string CharAt(int line, int head, bool haveTag = false) 
-    { 
-        if (!haveTag)
-            return Stream[line].Chars[head]; 
-        else
-        {
-            console.printf(string.Format("Char At looked at line: %d, head: %d, value: %s", line, head, Stream[line].Chars[head]));
-            //string c = Stream[line].Chars[head];
-            //return c;
-            if (line < Lines() && head < Stream[line].Length)
-            {
-                StreamLine sl = Stream[line];
-                return sl.Chars[head];
-             //   return Stream[line].Chars[head];
-            }
-            else
-            {
-                console.printf("Array Access out of bounds!");
-                return "";
-            }
-        }
-    }
 
+    /*
+        Returns the character on the given line at the given read index
+
+    */
+    string CharAt(int line, int head) { return Stream[line].Chars[head]; }
+
+    /*
+        Stream constructor
+    
+    */
     FileStream Init(string RawLump, int LumpNumber, bool mode = false)
     {
         self.Line = 0;
+        self.Head = 0;
         self.LumpNumber = LumpNumber;
         self.LumpHash = FileStream.GetLumpHash(RawLump);
 
@@ -145,7 +163,7 @@ class FileStream
         {
             string n = RawLump.Mid(i, 1);
             if (n != "\n")
-                l = string.Format("%s%s", l, n);
+                l.AppendFormat("%s", n);
             else if (l.Length() > 0)
             {
                 StreamLine sl = new("StreamLine").Init(l, tln++, mode);
@@ -171,36 +189,57 @@ class FileStream
         return self;
     }
 
-    // Standard (pretty much) Peek(To) functions - these are aware of the line to be on
-    string Peek(int at) { return CharAt(Line, at); }
-    // Note that "head" is flagged "out", this should be the parser read head
-    string PeekTo(int at, int len, out int head, bool haveTag = false)
+    // Peek, return char on Line at Head
+    string Peek() { return CharAt(Line, Head); }
+
+    // PeekTo given length.  Moves Head and Line
+    string PeekTo(int len = 1)
     {
         string s = "";
-        if (at >= 0 && len > 0 &&
-            at < Stream[Line].Length && at + len <= Stream[Line].Length)
+
+        if (!(Head >= 0 && Head < Stream[Line].Length) ||
+            !(Head + len <= Stream[Line].Length))
         {
-            console.printf(string.Format("PeekTo, at: %d, len: %d, head:%d, Line: %d, Line Length: %d", at, len, head, Line, Stream[Line].Length));
-            //if (!haveTag)
-            //{
-            for (int i = 0; i < len; i++)
-                s = string.Format("%s%s", s, CharAt(Line, i + at, haveTag));
-            //}
-
-            head += len;
+            Head = 0;
+            Line++;
         }
+        else if (!(len > 0 && len <= Stream[Line].Length))
+            return s;
 
+        for (int i = 0; i < len; i++)
+            s.AppendFormat("%s", CharAt(Line, i + Head));
+
+        console.printf(string.Format("PeekTo, Line: %d, Head: %d, len: %d, Line Length: %d, Peek Contents: %s", Line, Head, len, Stream[Line].Length, s));
+
+        Head += len;
         return s;
     }
-    // Wrapper for PeekTo which allows reading ahead without moving the head
-    string PeekFor(int at, int len)
+
+    // Same as PeekTo, just does not move Head or Line
+    string PeekFor(int at = -1, int len = 1)
     { 
-        int head;
-        return PeekTo(at, len, head);
+        string s = "";
+        int h = at == -1 ? Head : at, 
+            l = Line;
+        if (!(Head >= 0 && Head < Stream[Line].Length) ||
+            !(Head + len <= Stream[Line].Length))
+        {
+            h = 0;
+            l++;
+        }
+        else if (!(len > 0 && len <= Stream[Line].Length))
+            return s;
+
+        for (int i = 0; i < len; i++)
+            s.AppendFormat("%s", CharAt(l, i + h));
+
+        console.printf(string.Format("PeekFor, Line: %d, Head: %d, len: %d, Line Length: %d, Peek Contents: %s", Line, Head, len, Stream[Line].Length, s));
+
+        return s;       
     }
 
     /*
-        Get End of Block
+        PeekEnd - a.k.a. Get End of Block
 
         What the end of block is can be defined.
 
@@ -213,13 +252,12 @@ class FileStream
         to the index to pick up at.
     
     */
-    int PeekEnd (out int from, string c)
+    int PeekEnd (string c)
     {
         // Check each line, including this one
-        int r = from;
+        int r = Head;
         for (int i = Line; i < Lines(); i++)
         {
-            string e = "";
             for (int j = r; j < Stream[i].Length; j++)
             {
                 //console.printf(string.format("Looking for character: %s -- Examining character, line %d, head %d, %s", c, i, j, CharAt(i, j)));
@@ -231,15 +269,15 @@ class FileStream
                     // Is there more after?
                     if (j + c.Length() < Stream[i].Length)
                     {
-                        console.printf("There's more after the terminator");
-                        from = j + c.Length();
+                        console.printf("PeekEnd - There's more after the terminator");
+                        Head = j + c.Length();
                         return i;
                     }
                     // No, go to the next line.
                     else
                     {
-                        console.printf("Go to the next line");
-                        from = 0;
+                        console.printf("PeekEnd - Go to the next line");
+                        Head = 0;
                         return i + 1;
                     }
                 }
