@@ -209,7 +209,7 @@ class FileStream
         for (int i = 0; i < len; i++)
             s.AppendFormat("%s", CharAt(Line, i + Head));
 
-        console.printf(string.Format("PeekTo, Line: %d, Head: %d, len: %d, Line Length: %d, Peek Contents: %s", Line, Head, len, Stream[Line].Length, s));
+        console.printf(string.Format("\chPeekTo\cc, Line: %d, Head: %d, len: %d, Line Length: %d, Peek Contents: %s", Line, Head, len, Stream[Line].Length, s));
 
         Head += len;
         return s;
@@ -233,7 +233,7 @@ class FileStream
         for (int i = 0; i < len; i++)
             s.AppendFormat("%s", CharAt(l, i + h));
 
-        console.printf(string.Format("PeekFor, Line: %d, Head: %d, len: %d, Line Length: %d, Peek Contents: %s", Line, Head, len, Stream[Line].Length, s));
+        console.printf(string.Format("\chPeekFor\cc, Line: %d, Head: %d, len: %d, Line Length: %d, Peek Contents: %s", Line, Head, len, Stream[Line].Length, s));
 
         return s;       
     }
@@ -269,14 +269,14 @@ class FileStream
                     // Is there more after?
                     if (j + c.Length() < Stream[i].Length)
                     {
-                        console.printf("PeekEnd - There's more after the terminator");
+                        console.printf("\chPeekEnd\cc - There's more after the terminator");
                         Head = j + c.Length();
                         return i;
                     }
                     // No, go to the next line.
                     else
                     {
-                        console.printf("PeekEnd - Go to the next line");
+                        console.printf("\chPeekEnd\cc - Go to the next line");
                         Head = 0;
                         return i + 1;
                     }

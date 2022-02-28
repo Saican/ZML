@@ -314,180 +314,180 @@ class ZMLHandler : EventHandler
                 e.AppendFormat("%s", file.PeekTo());
                 // Attempt to create a token with it - the default is CHAR
                 t = stringToToken(e);
-                console.printf(string.Format("Lexing - Contents of e: %s, resultant token: %s(%d)", e, tokenToString(t), t));
+                console.printf(string.Format("\cfLexing\cc - Contents of e: \cy%s\cc, resultant token: \cy%s\cc(\cx%d\cc)", e, tokenToString(t), t));
 
-                switch (t)
-                {
-                    // Keywords
-                    case T_KEY_PHRASE:
-                        if (!bKeyPhrase)
-                            bKeyPhrase = true;
-                        break;
-                    case T_KEY_LIST:
-                        if (bKeyPhrase)
-                            bKeyList = true;
-                        break;
-
-                    /* 
-                        Context: Opening or closing of a word 
-                    */
-                    case T_SPECIALCHAR_DOUBLEQUOTE:
-                        if (bKeyPhrase || bKeyList)
-                        {
-                            if (bFirstQuote)
-                                bLastQuote = true;
-                            else
-                                bFirstQuote = true;
-                        }
-                        break;
-
-                    /* 
-                        Context : Separator of words 
-                    */
-                    case T_SPECIALCHAR_COMMA:
-                        if (bKeyPhrase || bKeyList)
-                        {
-                            if ((bFirstQuote && bLastQuote) && 
-                                (bHaveTagName || bHaveAttributeName))
-                            {
-                                bComma = true;
-                                bFirstQuote = bLastQuote = false;
-                            }
-                        }
-                        break;
-
-                    /*
-                        Context: Opening of list
-                    */
-                    case T_SPECIALCHAR_OPENBRACE:
-                        if (bKeyPhrase && !bEOB && !bKeyList)
-                        {
-                            bOpenBlock = true;
-                            if (bFirstQuote && bLastQuote)
-                                bFirstQuote = bLastQuote = false;
-                        }
-                        else if (bKeyPhrase && !bEOB && bOpenBlock && bKeyList)
-                            bOpenList = true;
-                        break;
-
-                    /*
-                        Context: Closing of list
-                    */
-                    case T_SPECIALCHAR_CLOSEBRACE:
-                        if (bKeyPhrase && !bEOB && bOpenBlock)
-                            bCloseBlock = true;
-                        else if (bKeyPhrase && !bEOB && bOpenBlock && bKeyList && bOpenList)
-                            bCloseList = true;
-                        break;
-
-                    /*
-                        Context: End of block
-                    */
-                    case T_SPECIALCHAR_SEMICOLON:
-                        if ((bKeyPhrase && bHaveTagName && bHaveType && !bOpenBlock) ||
-                            (bKeyPhrase && !bEOB && bKeyList && bOpenList && bHaveAttributeName && bHaveType))
-                        {
-                            bEOB = true;
-                            if (bFirstQuote && bLastQuote)
-                                bFirstQuote = bLastQuote = false;
-                        }
-                        break;
-
-                    /*
-                        Context: Comment
-                    */
-                    case T_SPECIALCHAR_BACKSLASH:
-                        if (bStartComment)
-                            bStartLineComment = true;
-                        else if (file.Peek().ByteAt(0) == 42 || file.Peek().ByteAt(0) == 47)
-                            bStartComment = true;
-                        break;
-
-                    /*
-                        Context: Block comment
-                    */
-                    case T_SPECIALCHAR_ASTERISK:
-                        if (bStartComment)
-                            bStartBlockComment = true;
-                        break;
-
-                    /*
-                        Context: none/variable
-                        Verify that character belongs to established context
-                    */
-                    default:
-                    case T_WORD_CHAR:
-                        console.printf(string.format("Contextualizer - Character encountered: %s, verify context.", e));
-
-                        
-                        break;                 
-                }
-
+                // Establish syntax context
+                Parse_DefLump_Contexualizer(e, t, file);
+                // Valid token and we don't need more stream, so decide what to do with the context
                 if (t > T_END && t != T_WORD_CHAR)
                 {
-                     // Block Comment
-                    if (bStartComment && bStartBlockComment)
-                        t = Parse_DefLump_Context_BlockComment(file);
-                    
-                    // Line Comment
-                    if (bStartComment && bStartLineComment)
-                        t = Parse_DefLump_Context_LineComment(file);
-
-                    // Create Tag
-                    if (bKeyPhrase && !ztag)
-                        ztag = new("ZMLTag").Init("zml_empty", "t_none");
-
-                    // Assign name
-                    if (bKeyPhrase && (ztag ? ztag.Empty() : false) && bFirstQuote && !bLastQuote)
-                    {
-                        console.Printf("Assigning name to tag");
-                        t = Parse_DefLump_Context_Word(file, ztag.name, "\"");
-                        if (t)
-                            bHaveTagName = true;
-                    }
-
-                    // Assign type
-                    if (bKeyPhrase && bHaveTagName && bComma && bFirstQuote && !bLastQuote)
-                    {
-                        console.printf("Assigning type to tag");
-                        string ts;
-                        t = Parse_DefLump_Context_Word(file, ts, "\"");
-                        if (t)
-                        {
-                            ztag.type = ztag.GetType(ts);
-                            bHaveType = true;
-                        }
-                    }
-
-                    // Phrase termination
-                    if (bKeyPhrase && bHaveTagName && bHaveType && !bOpenBlock)
-                    {
-                        if (bEOB)
-                        {
-                            taglist.Push(ztag);
-                            ztag = null;
-                            bKeyPhrase = bHaveTagName = bHaveType = false;
-                            console.printf("Tag was terminated without attributes");
-                        }
-                        else
-                            console.printf("Should be reading a tag block next");
-
-                        bComma = bFirstQuote = bLastQuote = false;
-                    }
-
-                    // Tag block
-                    if (bKeyPhrase && bHaveTagName && bHaveType && bOpenBlock)
-                    {
-
-                    }
-
+                    Parse_DefLump_Context_Tasker(t, file, ztag);
                     e = "";
                 }
             }
         }
     }
 
-   
+    void Parse_DefLump_Contexualizer(string e, out LTOKEN t, out FileStream file)
+    {
+        switch (t)
+        {
+            // Keywords
+            case T_KEY_PHRASE:
+                if (!bKeyPhrase)
+                    bKeyPhrase = true;
+                break;
+            case T_KEY_LIST:
+                if (bKeyPhrase)
+                    bKeyList = true;
+                break;
+
+            /* 
+                Context: Opening or closing of a word 
+            */
+            case T_SPECIALCHAR_DOUBLEQUOTE:
+                if (bKeyPhrase || bKeyList)
+                {
+                    if (bFirstQuote)
+                        bLastQuote = true;
+                    else
+                        bFirstQuote = true;
+                }
+                break;
+
+            /* 
+                Context : Separator of words 
+            */
+            case T_SPECIALCHAR_COMMA:
+                if (bKeyPhrase || bKeyList)
+                {
+                    if ((bFirstQuote && bLastQuote) && 
+                        (bHaveTagName || bHaveAttributeName))
+                    {
+                        bComma = true;
+                        bFirstQuote = bLastQuote = false;
+                    }
+                }
+                break;
+
+            /*
+                Context: Opening of list
+            */
+            case T_SPECIALCHAR_OPENBRACE:
+                if (bKeyPhrase && !bEOB && !bKeyList)
+                    bOpenBlock = true;  
+                else if (bKeyPhrase && !bEOB && bOpenBlock && bKeyList)
+                    bOpenList = true;
+                break;
+
+            /*
+                Context: Closing of list
+            */
+            case T_SPECIALCHAR_CLOSEBRACE:
+                if (bKeyPhrase && !bEOB && bOpenBlock)
+                    bCloseBlock = true;
+                else if (bKeyPhrase && !bEOB && bOpenBlock && bKeyList && bOpenList)
+                    bCloseList = true;
+                break;
+
+            /*
+                Context: End of block
+            */
+            case T_SPECIALCHAR_SEMICOLON:
+                if ((bKeyPhrase && bHaveTagName && bHaveType && !bOpenBlock) ||
+                    (bKeyPhrase && !bEOB && bKeyList && bOpenList && bHaveAttributeName && bHaveType))
+                    bEOB = true;
+                break;
+
+            /*
+                Context: Comment
+            */
+            case T_SPECIALCHAR_BACKSLASH:
+                if (bStartComment)
+                    bStartLineComment = true;
+                else if (file.Peek().ByteAt(0) == 42 || file.Peek().ByteAt(0) == 47)
+                    bStartComment = true;
+                break;
+
+            /*
+                Context: Block comment
+            */
+            case T_SPECIALCHAR_ASTERISK:
+                if (bStartComment)
+                    bStartBlockComment = true;
+                break;
+
+            /*
+                Context: none/variable
+                Verify that character belongs to established context
+            */
+            default:
+            case T_WORD_CHAR:
+                console.printf(string.format("\cpContextualizer\cc - Character encountered: %s, verify context.", e));
+
+                
+                break;                 
+        }
+    }
+
+    void Parse_DefLump_Context_Tasker(out LTOKEN t, out FileStream file, out ZMLTag ztag)
+    {
+        // Block Comment
+        if (bStartComment && bStartBlockComment)
+            t = Parse_DefLump_Context_BlockComment(file);
+        
+        // Line Comment
+        if (bStartComment && bStartLineComment)
+            t = Parse_DefLump_Context_LineComment(file);
+
+        // Create Tag
+        if (bKeyPhrase && !ztag)
+            ztag = new("ZMLTag").Init("zml_empty", "t_none");
+
+        // Assign name
+        if (bKeyPhrase && (ztag ? ztag.Empty() : false) && bFirstQuote && !bLastQuote)
+        {
+            console.Printf("Assigning name to tag");
+            t = Parse_DefLump_Context_Word(file, ztag.name, "\"");
+            if (t)
+                bHaveTagName = true;
+        }
+
+        // Assign type
+        if (bKeyPhrase && bHaveTagName && bComma && bFirstQuote && !bLastQuote)
+        {
+            console.printf("Assigning type to tag");
+            string ts;
+            t = Parse_DefLump_Context_Word(file, ts, "\"");
+            if (t)
+            {
+                ztag.type = ztag.GetType(ts);
+                bHaveType = true;
+            }
+        }
+
+        // Phrase termination
+        if (bKeyPhrase && bHaveTagName && bHaveType && !bOpenBlock)
+        {
+            if (bEOB)
+            {
+                taglist.Push(ztag);
+                ztag = null;
+                bKeyPhrase = bHaveTagName = bHaveType = false;
+                console.printf("Tag was terminated without attributes");
+            }
+            else
+                console.printf("Should be reading a tag block next");
+
+            bComma = bFirstQuote = bLastQuote = false;
+        }
+
+        // Tag block
+        if (bKeyPhrase && bHaveTagName && bHaveType && bOpenBlock)
+        {
+
+        }
+    }
 
     /*
         Tokens are turned into "contexts",
@@ -500,7 +500,7 @@ class ZMLHandler : EventHandler
     */
     LTOKEN Parse_DefLump_Context_BlockComment(out FileStream file)
     {
-        console.printf("Parse - Context Block Comment");
+        console.printf("\ctParse\cc - Context Block Comment");
         // PeekEnd will search for the specified closing tag, setting reader in the process.
         // The return is the line to move to, however it will return -1 if nothing is found,
         // so we need to check it before setting file.Line.
@@ -516,7 +516,7 @@ class ZMLHandler : EventHandler
 
     LTOKEN Parse_DefLump_Context_LineComment(out FileStream file)
     {
-        console.printf("Parse - Context Line Comment");
+        console.printf("\ctParse\cc - Context Line Comment");
         // Check that going to the next line will not go beyond the file
         if (file.Line + 1 < file.Lines())
         {
@@ -532,7 +532,7 @@ class ZMLHandler : EventHandler
 
     LTOKEN Parse_DefLump_Context_Word(out FileStream file, out string word, string w)
     {
-        console.printf("Parse - Context Word");
+        console.printf("\ctParse\cc - Context Word");
         int ws = file.Head;
         int nextLine = file.PeekEnd(w);
         if (nextLine != -1)
@@ -545,7 +545,7 @@ class ZMLHandler : EventHandler
         else // We do not move lines just because Head is 0, we need to go back and pick up the last quote if it's there.
             file.Head = ws + word.Length();
 
-        console.printf(string.format("Parse - Context Word - The word is: %s, Head was at: %d, Head is now at: %d%s", word, ws, file.Head, (file.Head == 0 ? string.Format(", moved lines, now on Line: %d", file.Line) : "")));
+        console.printf(string.format("\ctParse\cc - Context Word - The word is: %s, Head was at: %d, Head is now at: %d%s", word, ws, file.Head, (file.Head == 0 ? string.Format(", moved lines, now on Line: %d", file.Line) : "")));
         return 1;
     }
 
