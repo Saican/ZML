@@ -159,13 +159,18 @@ class FileStream
         // Break each line of the file into a StreamLine object
         string l = "";
         int tln = 1;    // This is the true line number, this is only for information during error output
+        console.printf(RawLump);
         for (int i = 0; i < RawLump.Length(); i++)
         {
             string n = RawLump.Mid(i, 1);
-            if (n != "\n")
+            if (n != "\n" && n != "\0")
+            {
                 l.AppendFormat("%s", n);
+                console.printf(string.format("Did not encounter newline, char is: %s", n));
+            }
             else if (l.Length() > 0)
             {
+                console.printf(string.Format("Hit newline, line is: %s", l));
                 StreamLine sl = new("StreamLine").Init(l, tln++, mode);
                 if (sl)
                     Stream.Push(sl);
@@ -177,14 +182,14 @@ class FileStream
         for (int i = 0; i < Stream.Size(); i++)
             self.StreamLength += Stream[i].Length;
 
-        /*console.printf(string.Format("File Stream contains %d lines.  Contents:", Lines()));
+        console.printf(string.Format("File Stream contains %d lines.  Contents:", Lines()));
         for (int i = 0; i < Lines(); i++)
         {
             string e = "";
             for (int j = 0; j < Stream[i].Length; j++)
                 e = string.Format("%s%s", e, CharAt(i, j));
             console.printf(string.format("Line #%d, length of %d, contents: %s", i, Stream[i].Length, e));
-        }*/
+        }
 
         return self;
     }
@@ -221,14 +226,18 @@ class FileStream
         string s = "";
         int h = at == -1 ? Head : at, 
             l = Line;
-        if (!(Head >= 0 && Head < Stream[Line].Length) ||
+        /*if (!(Head >= 0 && Head < Stream[Line].Length) ||
             !(Head + len <= Stream[Line].Length))
         {
+            console.printf("peek for next line");
             h = 0;
             l++;
         }
-        else if (!(len > 0 && len <= Stream[Line].Length))
+        else*/ if (!(len > 0 && len <= Stream[Line].Length))
+        {
+            console.printf("\cgPeekFor got bullshit length?!");
             return s;
+        }
 
         for (int i = 0; i < len; i++)
             s.AppendFormat("%s", CharAt(l, i + h));
@@ -269,7 +278,7 @@ class FileStream
                     // Is there more after?
                     if (j + c.Length() < Stream[i].Length)
                     {
-                        console.printf("\chPeekEnd\cc - There's more after the terminator");
+                        console.printf(string.format("\chPeekEnd\cc - There's more after the terminator, head at : %d, moving to %d, line %d", Head, j + c.Length(), i));
                         Head = j + c.Length();
                         return i;
                     }

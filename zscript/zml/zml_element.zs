@@ -55,8 +55,32 @@ class ZMLElement
 
 class ZMLTag : ZMLElement
 {
+    enum HFLAG
+    {
+        HF_strict,
+        HF_addtype,
+        HF_overwrite,
+        HF_obeyincoming,
+    };
+    HFLAG handling;
+    HFLAG stringToHFlag(string e)
+    {
+        if (e ~== "addtype")
+            return HF_addtype;
+        if (e ~== "overwrite")
+            return HF_overwrite;
+        if (e ~== "obeyincoming")
+            return HF_obeyincoming;
+        
+        return HF_strict;
+    }
+
     array<ZMLElement> attributes;
 
-    ZMLTag Init(string name, string type) { return ZMLTag(super.Init(name, type)); }
+    ZMLTag Init(string name, string type) 
+    {
+        handling = HF_strict;
+        return ZMLTag(super.Init(name, type)); 
+    }
 }
 

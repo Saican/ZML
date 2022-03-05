@@ -68,6 +68,7 @@ class ZMLHandler : EventHandler
         // Keywords
         T_KEY_PHRASE,
         T_KEY_LIST,
+        T_KEY_FLAG,
 
         // Special Characters - context establishing tokens
         T_SPECIALCHAR_DOUBLEQUOTE,
@@ -78,10 +79,9 @@ class ZMLHandler : EventHandler
         T_SPECIALCHAR_BACKSLASH,
         T_SPECIALCHAR_ASTERISK,
 
-        // Context dependent words - this means it matters where in the parser we are when reading these tokens
+        // Context verification - this means what was received is unknown, 
+        // so what happens next depends on the established context.
         T_WORD_CHAR,
-        T_WORD_NAME,
-        T_WORD_TYPE,
 
         // These are errors
         T_IDKWHAT = -1,
@@ -98,6 +98,8 @@ class ZMLHandler : EventHandler
             return T_KEY_PHRASE;
         if (e ~== "attributes")
             return T_KEY_LIST;
+        if (e ~== "addtype" || e ~== "overwrite" || e ~== "obeyincoming")
+            return T_KEY_FLAG;
 
         // Special Characters
         if (e.Length() == 1)
@@ -135,6 +137,8 @@ class ZMLHandler : EventHandler
             return "T_KEY_PHRASE";
         if (t == T_KEY_LIST)
             return "T_KEY_LIST";
+        if (t == T_KEY_FLAG)
+            return "T_KEY_FLAG";
 
         // Special Characters - context establishing tokens
         if (t == T_SPECIALCHAR_DOUBLEQUOTE)
@@ -152,13 +156,8 @@ class ZMLHandler : EventHandler
         if (t == T_SPECIALCHAR_ASTERISK)
             return "T_SPECIALCHAR_ASTERISK";
 
-        // Context dependent words - this means it matters where in the parser we are when reading these tokens
         if (t == T_WORD_CHAR)
             return "T_WORD_CHAR";
-        if (t ==  T_WORD_NAME)
-            return "T_WORD_NAME";
-        if (t == T_WORD_TYPE)
-            return "T_WORD_TYPE";
 
         // These are errors
         if (t == T_IDKWHAT)
@@ -244,7 +243,8 @@ class ZMLHandler : EventHandler
         These bools establish contexts
     */
     bool bKeyPhrase,
-        bKeyList, 
+        bKeyList,
+        bKeyFlag, 
     
         bStartComment,
         bStartLineComment,
@@ -271,6 +271,7 @@ class ZMLHandler : EventHandler
     {
         bKeyPhrase = false;
         bKeyList = false;
+        bKeyFlag = false;
 
         bStartComment = false;
         bStartLineComment = false;
@@ -303,6 +304,7 @@ class ZMLHandler : EventHandler
             string e = "";
             LTOKEN t = 1;
             ZMLTag ztag = null;
+            ZMLElement zatt = null;
             NoContext();
 
             console.printf(string.Format("\n\n\cxPARSING LUMP# \cy%d\cx, HASH: \cy%d", file.LumpNumber, file.LumpHash));
@@ -317,18 +319,18 @@ class ZMLHandler : EventHandler
                 console.printf(string.Format("\cfLexing\cc - Contents of e: \cy%s\cc, resultant token: \cy%s\cc(\cx%d\cc)", e, tokenToString(t), t));
 
                 // Establish syntax context
-                Parse_DefLump_Contexualizer(e, t, file);
+                Parse_DefLump_Contexualizer(file, e, t);
                 // Valid token and we don't need more stream, so decide what to do with the context
                 if (t > T_END && t != T_WORD_CHAR)
                 {
-                    Parse_DefLump_Context_Tasker(t, file, ztag);
+                    Parse_DefLump_Context_Tasker(file, e, t, ztag, zatt);
                     e = "";
                 }
             }
         }
     }
 
-    void Parse_DefLump_Contexualizer(string e, out LTOKEN t, out FileStream file)
+    void Parse_DefLump_Contexualizer(out FileStream file, string e, out LTOKEN t)
     {
         switch (t)
         {
@@ -341,6 +343,10 @@ class ZMLHandler : EventHandler
                 if (bKeyPhrase)
                     bKeyList = true;
                 break;
+            case T_KEY_FLAG:
+                if (bKeyPhrase)
+                    bKeyFlag = true;
+                break;
 
             /* 
                 Context: Opening or closing of a word 
@@ -349,9 +355,21 @@ class ZMLHandler : EventHandler
                 if (bKeyPhrase || bKeyList)
                 {
                     if (bFirstQuote)
+                    {
                         bLastQuote = true;
-                    else
+                        console.printf("This is the last quote");
+                    }
+                    else if (bKeyPhrase && !bKeyList ? 
+                                (!bHaveTagName || (bHaveTagName && bComma && !bHaveType)) : 
+                                (!bHaveAttributeName || (bHaveAttributeName && bComma && !bHaveType)))
+                    {
+                        console.printf("This is the first quote");
                         bFirstQuote = true;
+                    }
+                    else
+                    {
+                        // Missing quote error
+                    }
                 }
                 break;
 
@@ -359,14 +377,15 @@ class ZMLHandler : EventHandler
                 Context : Separator of words 
             */
             case T_SPECIALCHAR_COMMA:
-                if (bKeyPhrase || bKeyList)
+                if ((bKeyPhrase || bKeyList) && 
+                    ((bFirstQuote && bLastQuote) && (bHaveTagName || bHaveAttributeName)))
                 {
-                    if ((bFirstQuote && bLastQuote) && 
-                        (bHaveTagName || bHaveAttributeName))
-                    {
                         bComma = true;
                         bFirstQuote = bLastQuote = false;
-                    }
+                }
+                else
+                {
+                    // Unexpect char error
                 }
                 break;
 
@@ -384,7 +403,7 @@ class ZMLHandler : EventHandler
                 Context: Closing of list
             */
             case T_SPECIALCHAR_CLOSEBRACE:
-                if (bKeyPhrase && !bEOB && bOpenBlock)
+                if (bKeyPhrase && !bEOB && bOpenBlock && (bKeyList ? bOpenList && bCloseList : false))
                     bCloseBlock = true;
                 else if (bKeyPhrase && !bEOB && bOpenBlock && bKeyList && bOpenList)
                     bCloseList = true;
@@ -395,8 +414,13 @@ class ZMLHandler : EventHandler
             */
             case T_SPECIALCHAR_SEMICOLON:
                 if ((bKeyPhrase && bHaveTagName && bHaveType && !bOpenBlock) ||
-                    (bKeyPhrase && !bEOB && bKeyList && bOpenList && bHaveAttributeName && bHaveType))
+                    (bKeyPhrase && !bEOB && bKeyList && bOpenList && bHaveAttributeName && bHaveType) ||
+                    (bKeyPhrase && bHaveTagName && bOpenBlock && bKeyFlag))
                     bEOB = true;
+                else
+                {
+                    // Unexpected char error
+                }
                 break;
 
             /*
@@ -407,6 +431,10 @@ class ZMLHandler : EventHandler
                     bStartLineComment = true;
                 else if (file.Peek().ByteAt(0) == 42 || file.Peek().ByteAt(0) == 47)
                     bStartComment = true;
+                else
+                {
+                    // Unexpected char error
+                }
                 break;
 
             /*
@@ -415,6 +443,10 @@ class ZMLHandler : EventHandler
             case T_SPECIALCHAR_ASTERISK:
                 if (bStartComment)
                     bStartBlockComment = true;
+                else
+                {
+                    // Unexpected char error
+                }
                 break;
 
             /*
@@ -424,13 +456,12 @@ class ZMLHandler : EventHandler
             default:
             case T_WORD_CHAR:
                 console.printf(string.format("\cpContextualizer\cc - Character encountered: %s, verify context.", e));
-
                 
                 break;                 
         }
     }
 
-    void Parse_DefLump_Context_Tasker(out LTOKEN t, out FileStream file, out ZMLTag ztag)
+    void Parse_DefLump_Context_Tasker(out FileStream file, string e, out LTOKEN t, out ZMLTag ztag, out ZMLElement zatt)
     {
         // Block Comment
         if (bStartComment && bStartBlockComment)
@@ -453,8 +484,8 @@ class ZMLHandler : EventHandler
                 bHaveTagName = true;
         }
 
-        // Assign type
-        if (bKeyPhrase && bHaveTagName && bComma && bFirstQuote && !bLastQuote)
+        // Assign tag type
+        if (bKeyPhrase && !bKeyList && bHaveTagName && bComma && bFirstQuote && !bLastQuote)
         {
             console.printf("Assigning type to tag");
             string ts;
@@ -466,26 +497,59 @@ class ZMLHandler : EventHandler
             }
         }
 
-        // Phrase termination
-        if (bKeyPhrase && bHaveTagName && bHaveType && !bOpenBlock)
+        // Flag detection
+        if (bKeyPhrase && bHaveTagName && bOpenBlock && !bEOB && (ztag ? (ztag.handling == ztag.HF_strict) : false) && bKeyFlag)
         {
-            if (bEOB)
-            {
-                taglist.Push(ztag);
-                ztag = null;
-                bKeyPhrase = bHaveTagName = bHaveType = false;
-                console.printf("Tag was terminated without attributes");
-            }
-            else
-                console.printf("Should be reading a tag block next");
+            console.printf(string.format("ZTag will have flag assigned: %s", e));
+            ztag.handling = ztag.stringToHFlag(e);
+        }
+        else if (bKeyPhrase && bHaveTagName && bOpenBlock && bKeyFlag && bEOB)
+            bKeyFlag = bEOB = false;
 
-            bComma = bFirstQuote = bLastQuote = false;
+
+        // Attribute names
+        if (bKeyPhrase && bHaveTagName && bOpenBlock && bKeyList && bOpenList && bFirstQuote && !bLastQuote && !zatt)
+        {
+            zatt = new("ZMLElement").Init("zml_empty", "t_none");
+            t = Parse_DefLump_Context_Word(file, zatt.name, "\"");
+            if (t)
+                bHaveAttributeName = true;
+            console.printf(string.format("\cgOMG attributes have names! It'll be named: %s", zatt.name));
         }
 
-        // Tag block
-        if (bKeyPhrase && bHaveTagName && bHaveType && bOpenBlock)
+        // Attribute type
+        if (bKeyPhrase && bHaveTagName && bOpenBlock && bKeyList && bOpenList && bHaveAttributeName && bComma && bFirstQuote && !bLastQuote)
         {
+            string ts;
+            t = Parse_DefLump_Context_Word(file, ts, "\"");
+            if (t)
+            {
+                zatt.type = zatt.GetType(ts);
+                bHaveType = true;
+            }
+            console.printf(string.format("Assigning type to attribute"));
+        }
+        else if (bKeyPhrase && bHaveTagName && bOpenBlock && bKeyList && bOpenList && bComma && bFirstQuote && bLastQuote && bEOB)
+        {
+            ztag.attributes.Push(zatt);
+            zatt = null;
+            bHaveAttributeName = bHaveType = bComma = bFirstQuote = bLastQuote = bEOB = false;
+        }
 
+        // Tag Definition Termination
+        if ((bKeyPhrase && bHaveTagName && bOpenBlock & bCloseBlock) || 
+            (bKeyPhrase && bHaveTagName && bEOB))
+        {
+            console.printf(string.format("\cxTag, %s, was terminated! Has %d attributes!", ztag.name, ztag.attributes.Size()));
+            taglist.Push(ztag);
+            ztag = null;
+            NoContext();
+        }
+        // Open block
+        else if (bKeyPhrase && bHaveTagName && bComma && bFirstQuote && bHaveType && bLastQuote && bOpenBlock && !bKeyList)
+        {
+            console.printf("\cgTag opens up for attributes and flags");
+            bComma = bFirstQuote = bHaveType = bLastQuote = false;
         }
     }
 
@@ -605,7 +669,18 @@ class ZMLHandler : EventHandler
             console.printf(string.Format("\n\t\t\ciZML failed to parse \cg%d \citag definition lumps!\n\t\t\t\t\cc- This means ZML encountered a problem with the file%s and stopped trying to create usable data from %s. Reported errors need fixed.\n\n", defParseFails, (defParseFails > 1 ? "s" : ""), (defParseFails > 1 ? "them" : "it")));
         // Nevermind, yay!  We win!
         else
+        {
             console.printf(string.format("\n\t\t\cyZML successfully parsed \cx%d \cyZMLDEFS lumps into \cx%d \cyZML tags!\n\n", defStreams.Size(), taglist.Size()));
+
+            for (int i = 0; i < taglist.Size(); i++)
+            {
+                string al = " -- Tag contains attributes: ";
+                for (int j = 0; j < taglist[i].attributes.Size(); j++)
+                    al.AppendFormat("%s (type:%d), ", taglist[i].attributes[j].name, taglist[i].attributes[j].type);
+
+                console.printf(string.Format("Tag is named (type%d): %s%s", taglist[i].type, taglist[i].name, taglist[i].attributes.Size() > 0 ? al : ""));
+            }
+        }
     }
 
     /* - END OF METHODS - */
