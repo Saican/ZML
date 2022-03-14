@@ -111,6 +111,8 @@ class FileStream
         return si + Head;
     }
 
+    int LineLength() { return Stream[Line].Length; }
+
     /*
         https://bit.ly/3sqyUXj
 
@@ -143,7 +145,7 @@ class FileStream
         Returns the character on the given line at the given read index
 
     */
-    string CharAt(int line, int head) { return Stream[line].Chars[head]; }
+    string CharAt(int line, int head) { return head < LineLength() ? Stream[line].Chars[head] : ""; }
 
     /*
         Stream constructor
@@ -159,18 +161,13 @@ class FileStream
         // Break each line of the file into a StreamLine object
         string l = "";
         int tln = 1;    // This is the true line number, this is only for information during error output
-        console.printf(RawLump);
         for (int i = 0; i < RawLump.Length(); i++)
         {
             string n = RawLump.Mid(i, 1);
             if (n != "\n" && n != "\0")
-            {
                 l.AppendFormat("%s", n);
-                console.printf(string.format("Did not encounter newline, char is: %s", n));
-            }
             else if (l.Length() > 0)
             {
-                console.printf(string.Format("Hit newline, line is: %s", l));
                 StreamLine sl = new("StreamLine").Init(l, tln++, mode);
                 if (sl)
                     Stream.Push(sl);
@@ -182,20 +179,22 @@ class FileStream
         for (int i = 0; i < Stream.Size(); i++)
             self.StreamLength += Stream[i].Length;
 
-        console.printf(string.Format("File Stream contains %d lines.  Contents:", Lines()));
+        /*console.printf(string.Format("File Stream contains %d lines.  Contents:", Lines()));
         for (int i = 0; i < Lines(); i++)
         {
             string e = "";
             for (int j = 0; j < Stream[i].Length; j++)
                 e = string.Format("%s%s", e, CharAt(i, j));
             console.printf(string.format("Line #%d, length of %d, contents: %s", i, Stream[i].Length, e));
-        }
+        }*/
 
         return self;
     }
 
     // Peek, return char on Line at Head
     string Peek() { return CharAt(Line, Head); }
+
+    int PeekB() { return CharAt(Line, Head).ByteAt(0); }
 
     // PeekTo given length.  Moves Head and Line
     string PeekTo(int len = 1)
@@ -290,10 +289,25 @@ class FileStream
                         return i + 1;
                     }
                 }
+                else if (c.Length() == 1 && IsCodeChar(CharAt(i, j).ByteAt(0)))
+                    return -1;
             }
             r = 0;
         }
 
         return -1; // We found nothing, which means something isn't closed, and now errors.
     }
+
+    /*
+        Returns boolean, checks if given string is a code character
+    */
+    private bool IsCodeChar(int b)
+    {
+        if (b == 34 || b == 44 || b == 123 || b == 125 || b == 59 || b == 47 || b == 42)
+            return true;
+
+        return false;
+    }
+
+    /* - END OF METHODS - */
 }

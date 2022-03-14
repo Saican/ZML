@@ -14,7 +14,6 @@ class Parser_ZMLTag
         // Initialize internals
         defParseFails = 0;
         NoContext();
-
         // Ok, read ZMLDEFS lumps into file streams
         Generate_DefStreams();
         console.printf(string.Format("\t\t\cdZML successfully read \cy%d \cdtag definition lumps into file streams!\n\t\t\t\t\cc- This means the ZMLDEFS files are in a parse-able format, it does not mean they are valid.\n\n", defStreams.Size()));
@@ -58,9 +57,7 @@ class Parser_ZMLTag
     }
 
     /* 
-        Reads each def lump into the defStreams array - without hashing files this function would cause duplicates!
-        I seriously do not know why, and neither does anyone else apparently!  I asked!
-        https://forum.zdoom.org/viewtopic.php?f=122&t=74720
+        Reads each def lump into the defStreams array
     */
     private void Generate_DefStreams(int l = 0)
     {
@@ -109,16 +106,14 @@ class Parser_ZMLTag
         T_SPECIALCHAR_BACKSLASH,
         T_SPECIALCHAR_ASTERISK,
 
-        // Context verification - this means what was received is unknown, 
-        // so what happens next depends on the established context.
-        T_WORD_CHAR,
-
         // These are errors
         T_IDKWHAT = -1,
         T_IDKWHAT_OPENCOMMENT = -2,
         T_IDKWHAT_INVALIDCHAR = -3,
         T_IDKWHAT_OPENSTRING = -4,
         T_IDKWHAT_UNEXPECTEDCODE = -5,
+        T_IDKWHAT_MISSINGCOMMA = -6,
+        T_IDKWHAT_MISSINGEOB = -7,
     };
 
     private LTOKEN stringToToken(string e)
@@ -151,7 +146,7 @@ class Parser_ZMLTag
                 return T_SPECIALCHAR_ASTERISK;
         }
             
-        return T_WORD_CHAR;
+        return T_MORE;
     }
 
     private string tokenToString(LTOKEN t)
@@ -186,9 +181,6 @@ class Parser_ZMLTag
         if (t == T_SPECIALCHAR_ASTERISK)
             return "T_SPECIALCHAR_ASTERISK";
 
-        if (t == T_WORD_CHAR)
-            return "T_WORD_CHAR";
-
         // These are errors
         if (t == T_IDKWHAT)
             return "T_IDKWHAT";
@@ -200,6 +192,10 @@ class Parser_ZMLTag
             return "T_IDKWHAT_OPENSTRING";
         if (t == T_IDKWHAT_UNEXPECTEDCODE)
             return "T_IDKWHAT_UNEXPECTEDCODE";
+        if (t == T_IDKWHAT_MISSINGCOMMA)
+            return "T_IDKWHAT_MISSINGCOMMA";
+        if (t == T_IDKWHAT_MISSINGEOB)
+            return "T_IDKWHAT_MISSINGEOB";
 
         return "UNKNOWN TOKEN!!!!";
     }
@@ -253,24 +249,19 @@ class Parser_ZMLTag
         return T_IDKWHAT;
     }
 
-    private string errorToString(LTOKEN t)
-    {
-        switch (t)
-        {
-            case T_IDKWHAT_OPENCOMMENT: return "OPENCOMMENT";
-            case T_IDKWHAT_INVALIDCHAR: return "INVALIDCHAR";
-            case T_IDKWHAT_OPENSTRING: return "OPENSTRING";
-            case T_IDKWHAT_UNEXPECTEDCODE: return "UNEXPECTEDCODE";
-            default:
-            case T_IDKWHAT: return "IDKWHAT";
-        }
-    }
 
 
+    /*
+        Public member.
+        This array contains the resulting xml tag list.
+    
+    */
     array<ZMLTag> taglist;
 
     /*
-        These bools establish contexts
+        Called the "boolean flock",
+        these establish context based
+        on the given token during parse.
     */
     private bool bKeyPhrase,
         bKeyList,
@@ -296,6 +287,20 @@ class Parser_ZMLTag
         bOpenList,
         bCloseBlock,
         bCloseList;
+
+    /*
+        This secondary flock
+        creates "pre-contexts".
+        That is, the parser can
+        expect certain buffer contents
+        and error check for that.
+    */
+    private bool bPreComma,
+        bPreEOB,
+        bPreOpenBlock,
+        bPreOpenList,
+        bPreCloseBlock,
+        bPreCloseList;
 
     private void NoContext()
     {
@@ -323,6 +328,23 @@ class Parser_ZMLTag
         bOpenList = false;
         bCloseBlock = false;
         bCloseList = false;
+
+        bPreComma = false;
+        bPreEOB = false;
+        bPreOpenBlock = false;
+        bPreOpenList = false;
+        bPreCloseBlock = false;
+        bPreCloseList = false;
+    }
+
+    private bool AnyContext()
+    {
+        return (bKeyPhrase || bKeyList || bKeyFlag ||
+            bStartComment || bStartLineComment || bStartBlockComment ||
+            bGetTagName || bGetAttributeName || bGetType ||
+            bHaveTagName || bHaveAttributeName || bHaveType ||
+            bFirstQuote || bLastQuote || bComma || bEOB || bOpenBlock || bOpenList || bCloseBlock || bCloseList ||
+            bPreComma || bPreEOB || bPreOpenBlock || bPreOpenList || bPreCloseBlock || bPreCloseList);
     } 
 
     private void Parse_DefLumps()
@@ -330,12 +352,12 @@ class Parser_ZMLTag
         // Loop through each file stream
         for (int i = 0; i < defStreams.Size(); i++)
         {
-            FileStream file = defStreams[i];
-            string e = "";
-            LTOKEN t = 1;
-            ZMLTag ztag = null;
-            ZMLElement zatt = null;
-            NoContext();
+            FileStream file = defStreams[i];    // The stream is referred to this way everywhere else, so...
+            string e = "";                      // Lexer buffer - what string from the stream is shoved into
+            LTOKEN t = 1;                       // Token - it's just a number so sometimes I treat it like one
+            ZMLTag ztag = null;                 // ZMLTag reference
+            ZMLElement zatt = null;             // ZMLElement reference
+            NoContext();                        // Clear the flock
 
             console.printf(string.Format("\n\n\cxPARSING LUMP# \cy%d\cx, HASH: \cy%d\cx, CONTAINED IN LUMP: \cy%s", file.LumpNumber, file.LumpHash, Wads.GetLumpFullName(file.LumpNumber)));
 
@@ -344,23 +366,35 @@ class Parser_ZMLTag
             {
                 // Get something from the stream
                 e.AppendFormat("%s", file.PeekTo());
-                // Attempt to create a token with it - the default is CHAR
+                // Attempt to create a token with it - the default is MORE
                 t = stringToToken(e);
                 console.printf(string.Format("\cfLexing\cc - Contents of e: \cy%s\cc, resultant token: \cy%s\cc(\cx%d\cc)", e, tokenToString(t), t));
 
                 // Establish syntax context
                 Parse_DefLump_Contexualizer(file, e, t);
-                // Valid token and we don't need more stream, so decide what to do with the context
-                if (t > T_END && t != T_WORD_CHAR)
+                // Check the context status from the last loop - the tasker establishes what to expect
+                Parse_DefLump_PreContext_Check(file, t);
+
+                // Check what was produced from lexing
+                if (t > T_END && t != T_MORE)
                 {
+                    // Do something from the context
                     Parse_DefLump_Context_Tasker(file, e, t, ztag, zatt);
+                    // The lexer buffer needs cleared.
                     e = "";
                 }
             }
+
+            // Oh no! Errors!
+            if (t < 0)
+                DefLump_ErrorOutput(t, file, e);
         }
     }
 
-    private void Parse_DefLump_Contexualizer(out FileStream file, string e, out LTOKEN t)
+    /*
+        Takes the token and sets the boolean flock
+    */
+    private void Parse_DefLump_Contexualizer(in FileStream file, string e, LTOKEN t)
     {
         switch (t)
         {
@@ -377,35 +411,19 @@ class Parser_ZMLTag
                 if (bKeyPhrase)
                     bKeyFlag = true;
                 break;
-
-            /* 
-                Context: Opening or closing of a word 
-            */
+            // Context: Opening or closing of a word
             case T_SPECIALCHAR_DOUBLEQUOTE:
                 if (bKeyPhrase || bKeyList)
                 {
                     if (bFirstQuote)
-                    {
                         bLastQuote = true;
-                        console.printf("This is the last quote");
-                    }
                     else if (bKeyPhrase && !bKeyList ? 
                                 (!bHaveTagName || (bHaveTagName && bComma && !bHaveType)) : 
                                 (!bHaveAttributeName || (bHaveAttributeName && bComma && !bHaveType)))
-                    {
-                        console.printf("This is the first quote");
                         bFirstQuote = true;
-                    }
-                    else
-                    {
-                        // Missing quote error
-                    }
                 }
                 break;
-
-            /* 
-                Context : Separator of words 
-            */
+            // Context : Separator of words
             case T_SPECIALCHAR_COMMA:
                 if ((bKeyPhrase || bKeyList) && 
                     ((bFirstQuote && bLastQuote) && (bHaveTagName || bHaveAttributeName)))
@@ -413,82 +431,84 @@ class Parser_ZMLTag
                         bComma = true;
                         bFirstQuote = bLastQuote = false;
                 }
-                else
-                {
-                    // Unexpect char error
-                }
                 break;
-
-            /*
-                Context: Opening of list
-            */
+            // Context: Opening of list
             case T_SPECIALCHAR_OPENBRACE:
                 if (bKeyPhrase && !bEOB && !bKeyList)
                     bOpenBlock = true;  
                 else if (bKeyPhrase && !bEOB && bOpenBlock && bKeyList)
                     bOpenList = true;
                 break;
-
-            /*
-                Context: Closing of list
-            */
+            // Context: Closing of list
             case T_SPECIALCHAR_CLOSEBRACE:
                 if (bKeyPhrase && !bEOB && bOpenBlock && (bKeyList ? bOpenList && bCloseList : false))
                     bCloseBlock = true;
                 else if (bKeyPhrase && !bEOB && bOpenBlock && bKeyList && bOpenList)
                     bCloseList = true;
                 break;
-
-            /*
-                Context: End of block
-            */
+            // Context: End of block
             case T_SPECIALCHAR_SEMICOLON:
-                if ((bKeyPhrase && bHaveTagName && bHaveType && !bOpenBlock) ||
-                    (bKeyPhrase && !bEOB && bKeyList && bOpenList && bHaveAttributeName && bHaveType) ||
-                    (bKeyPhrase && bHaveTagName && bOpenBlock && bKeyFlag))
-                    bEOB = true;
-                else
-                {
-                    // Unexpected char error
-                }
+                bEOB = true;
                 break;
-
-            /*
-                Context: Comment
-            */
+            // Context: Comment
             case T_SPECIALCHAR_BACKSLASH:
                 if (bStartComment)
                     bStartLineComment = true;
-                else if (file.Peek().ByteAt(0) == 42 || file.Peek().ByteAt(0) == 47)
+                else if (file.PeekB() == 42 || file.PeekB() == 47)
                     bStartComment = true;
-                else
-                {
-                    // Unexpected char error
-                }
                 break;
-
-            /*
-                Context: Block comment
-            */
+            // Context: Block comment
             case T_SPECIALCHAR_ASTERISK:
                 if (bStartComment)
                     bStartBlockComment = true;
-                else
-                {
-                    // Unexpected char error
-                }
-                break;
-
-            /*
-                Context: none/variable
-                Verify that character belongs to established context
-            */
-            default:
-            case T_WORD_CHAR:
-                console.printf(string.format("\cpContextualizer\cc - Character encountered: %s, verify context.", e));
-                
-                break;                 
+                break;                
         }
+    }
+
+    /*
+        If the given context is false, checks if the next character
+        matches the given byte code.
+
+        Returns true if: the context is false and the next character maches
+    
+    */
+    private bool ContextPeek(in FileStream file, bool ctx, int b) 
+    { 
+        //console.printf(string.format("ctx: %d, b: %d, peek: %d, head: %d, line length: %d", ctx, b, file.PeekB(), file.Head, file.LineLength()));
+        return (!ctx &&                                                                 // We should have no context
+                    (file.StreamIndex() < file.StreamLength ?                           // Check if we've read the whole file
+                        (file.Head < file.LineLength() ?                                // Check if we've read the whole line
+                            file.PeekB() == b :                                         // If all of the above passes, does the next byte code match?
+                            file.Line + 1 < file.Lines() ?                              // It did not, so can we check the next line?
+                                file.Stream[file.Line + 1].Chars[0].ByteAt(0) == b :    // Apparently we can, so access down to the first char and repeat the check
+                                false) :                                                // Out of lines - which probably means end of the the file too
+                        false));                                                        // End of the file
+    }
+
+    /*
+        Does some witchcraft with the flock and the stream 
+        to error check before going to the tasker.
+    
+    */
+    private void Parse_DefLump_PreContext_Check(in FileStream file, out LTOKEN t)
+    {
+        //console.printf("checking for missing commas");
+        // Missing comma
+        if (bKeyPhrase && !bKeyList ? 
+                (bHaveTagName && bLastQuote && bPreComma && !ContextPeek(file, bComma, 44)) :
+                (bHaveAttributeName && bLastQuote && bPreComma && !ContextPeek(file, bComma, 44)))
+            t = T_IDKWHAT_MISSINGCOMMA;
+        else if (t == T_SPECIALCHAR_COMMA && bPreComma)
+            bPreComma = false;
+
+        //console.printf("checking for missing eobs");
+        // Missing EOB
+        if (((bKeyPhrase && !bKeyList && bHaveTagName && bKeyFlag && bPreEOB && !bEOB) || // Flags
+            (bKeyPhrase && !bKeyList && bHaveTagName && bHaveType && bLastQuote && bPreEOB && !ContextPeek(file, bOpenBlock, 123) && (bOpenBlock || bEOB ? false : !ContextPeek(file, bEOB, 59))) || // Tag termination
+            (bKeyPhrase && bKeyList && bHaveAttributeName && bHaveType && bLastQuote && bPreEOB && (bEOB ? false : !ContextPeek(file, bEOB, 59))))) // Attribute termination
+            t = T_IDKWHAT_MISSINGEOB;
+        else if ((t == T_SPECIALCHAR_SEMICOLON || t == T_SPECIALCHAR_OPENBRACE) && bPreEOB)
+            bPreEOB = false;
     }
 
     enum LCONTEXT
@@ -500,15 +520,29 @@ class Parser_ZMLTag
         C_ASSIGN_TAG_TYPE,
         C_FLAG,
         C_CLOSE_FLAG,
+        C_ATTRIBUTE_START,
         C_ATTRIBUTE_NAME,
         C_ATTRIBUTE_TYPE,
-        C_FINISH_ATTRIBUTE,
+        C_ATTRIBUTE_FINISH,
         C_TERMINATE_TAG,
         C_OPEN_BLOCK,
         C_NONE,
     };
 
-    private LCONTEXT EvaluateContext(out ZMLTag ztag, out ZMLElement zatt)
+    /*
+        The flock is turned into a
+        context token that allows
+        the tasker to be a bit more
+        organized.  This does mean
+        the soup is just cooked
+        someplace else.
+
+        REMEMBER SARAH!!!!
+        IT PROBABLY ISN'T WISE TO RELY ON ANY OF THE PRE CONTEXT FLOCK,
+        UNLESS YOU'RE CHECKING THAT IT'S FALSE!!!!!
+
+    */
+    private LCONTEXT EvaluateContext(in ZMLTag ztag, in ZMLElement zatt)
     {
         // Block Comment
         if (bStartComment && bStartBlockComment)
@@ -526,10 +560,13 @@ class Parser_ZMLTag
         if (bKeyPhrase && !bKeyList && bHaveTagName && bComma && bFirstQuote && !bLastQuote)
             return C_ASSIGN_TAG_TYPE;
         // Flag Detection
-        if (bKeyPhrase && !bKeyList && bHaveTagName && bComma && bFirstQuote && !bLastQuote)
+        if (bKeyPhrase && bHaveTagName && bOpenBlock && bKeyFlag && !bPreEOB && !bEOB)
             return C_FLAG;
         else if (bKeyPhrase && bHaveTagName && bOpenBlock && bKeyFlag && bEOB)
             return C_CLOSE_FLAG;
+        // Attribute list setup
+        if (bKeyPhrase && bHaveTagName && bOpenBlock && bKeyList && !bPreOpenList && !bOpenList)
+            return C_ATTRIBUTE_START;
         // Attribute names
         if (bKeyPhrase && bHaveTagName && bOpenBlock && bKeyList && bOpenList && bFirstQuote && !bLastQuote && !zatt)
             return C_ATTRIBUTE_NAME;
@@ -537,7 +574,7 @@ class Parser_ZMLTag
         if (bKeyPhrase && bHaveTagName && bOpenBlock && bKeyList && bOpenList && bHaveAttributeName && bComma && bFirstQuote && !bLastQuote)
             return C_ATTRIBUTE_TYPE;
         else if (bKeyPhrase && bHaveTagName && bOpenBlock && bKeyList && bOpenList && bComma && bFirstQuote && bLastQuote && bEOB)
-            return C_FINISH_ATTRIBUTE;
+            return C_ATTRIBUTE_FINISH;
         // Tag Definition Termination
         if ((bKeyPhrase && bHaveTagName && bOpenBlock & bCloseBlock) || 
             (bKeyPhrase && bHaveTagName && bEOB))
@@ -549,6 +586,11 @@ class Parser_ZMLTag
         return C_NONE;
     }
 
+    /*
+        Determines what to do based on EvaluateContext.
+        This is the final step where the parser can
+        finally do something with the contents of the lexer.
+    */
     private void Parse_DefLump_Context_Tasker(out FileStream file, string e, out LTOKEN t, out ZMLTag ztag, out ZMLElement zatt)
     {
         switch (EvaluateContext(ztag, zatt))
@@ -557,95 +599,90 @@ class Parser_ZMLTag
             case C_BLOCK_COMMENT:
                 t = Parse_DefLump_Context_BlockComment(file);
                 break;
-            
             // Line Comment
             case C_LINE_COMMENT:
                 t = Parse_DefLump_Context_LineComment(file);
                 break;
-
             // Create Tag
             case C_MAKE_TAG:
                 ztag = new("ZMLTag").Init("zml_empty", "t_none");
                 break;
-
             // Assign name
             case C_ASSIGN_TAG_NAME:
-                console.Printf("Assigning name to tag");
                 t = Parse_DefLump_Context_Word(file, ztag.name, "\"");
                 if (t)
-                    bHaveTagName = true;
+                    bHaveTagName = bPreComma = true;
                 break;
-
             // Assign tag type
             case C_ASSIGN_TAG_TYPE:
-                console.printf("Assigning type to tag");
                 string tts;
                 t = Parse_DefLump_Context_Word(file, tts, "\"");
                 if (t)
                 {
                     ztag.type = ztag.GetType(tts);
                     bHaveType = true;
+                    bPreEOB = bPreOpenBlock = true;
                 }
                 break;
-
             // Flag detection
             case C_FLAG:
-                console.printf(string.format("ZTag will have flag assigned: %s", e));
                 ztag.handling = ztag.stringToHFlag(e);
+                bPreEOB = true;
                 break;
+            // Flag termination
             case C_CLOSE_FLAG:
-                bKeyFlag = bEOB = false;
+                bKeyFlag = bEOB = bPreEOB = false;
                 break;
-
-
+            // Begin Attribute List
+            case C_ATTRIBUTE_START:
+                bPreOpenList = true;
+                console.printf("Set to open attribute list");
+                break;
             // Attribute names
             case C_ATTRIBUTE_NAME:
                 zatt = new("ZMLElement").Init("zml_empty", "t_none");
                 t = Parse_DefLump_Context_Word(file, zatt.name, "\"");
                 if (t)
-                    bHaveAttributeName = true;
-                console.printf(string.format("\cgOMG attributes have names! It'll be named: %s", zatt.name));
+                    bHaveAttributeName = bPreComma = true;
                 break;
-
             // Attribute type
             case C_ATTRIBUTE_TYPE:
                 string ats;
                 t = Parse_DefLump_Context_Word(file, ats, "\"");
+                console.printf("got attribute type");
                 if (t)
                 {
                     zatt.type = zatt.GetType(ats);
                     bHaveType = true;
+                    bPreEOB = true;
                 }
-                console.printf(string.format("Assigning type to attribute"));
                 break;
-            case C_FINISH_ATTRIBUTE:
+            // Attribute termination
+            case C_ATTRIBUTE_FINISH:
+                console.printf("finished attribute");
                 ztag.attributes.Push(zatt);
                 zatt = null;
-                bHaveAttributeName = bHaveType = bComma = bFirstQuote = bLastQuote = bEOB = false;
+                bHaveAttributeName = bHaveType = bComma = bFirstQuote = bLastQuote = bPreEOB = bEOB = false;
                 break;
-
             // Tag Definition Termination
             case C_TERMINATE_TAG:
-                console.printf(string.format("\cxTag, %s, was terminated! Has %d attributes!", ztag.name, ztag.attributes.Size()));
+                console.printf(string.format("\cxTag, \cy%s\cx, was terminated! Has \cy%d \cxattributes!", ztag.name, ztag.attributes.Size()));
                 taglist.Push(ztag);
                 ztag = null;
                 NoContext();
                 break;
             // Open block
             case C_OPEN_BLOCK:
-                console.printf("\cgTag opens up for attributes and flags");
-                bComma = bFirstQuote = bHaveType = bLastQuote = false;
+                console.printf(string.format("\cxTag, \cy%s\cx, opens up for attributes and flags!", ztag.name));
+                bComma = bFirstQuote = bHaveType = bLastQuote = bPreEOB = false;
                 break;
         }
     }
 
     /*
-        Tokens are turned into "contexts",
-        which is a fancy way of saying a bunch of
-        booleans get switched on or off.
-
-        The result of how those bools are set
-        determines what each Contextulizer does.
+        These functions are just jobs.
+        Oddly comments get the most special treatment,
+        where most everything else goes through Context_Word.
     
     */
     private LTOKEN Parse_DefLump_Context_BlockComment(out FileStream file)
@@ -658,7 +695,7 @@ class Parser_ZMLTag
         if (nextLine != -1)
             file.Line = nextLine;
         else
-            return stringToErrorCheck("OPENC");
+            return T_IDKWHAT_OPENCOMMENT;
 
         bStartComment = bStartBlockComment = false;
         return 1;
@@ -686,9 +723,9 @@ class Parser_ZMLTag
         int ws = file.Head;
         int nextLine = file.PeekEnd(w);
         if (nextLine != -1)
-            word = file.PeekFor(ws, (file.Head != 0 ? file.Head : file.Stream[file.Line].Length) - ws - 1);
+            word = file.PeekFor(ws, (file.Head != 0 ? file.Head : file.LineLength()) - ws - 1);
         else
-            return stringToErrorCheck("OPENSTR");
+            return T_IDKWHAT_OPENSTRING;
 
         if (file.Head != 0)
             file.Head -= 1;
@@ -699,35 +736,59 @@ class Parser_ZMLTag
         return 1;
     }
 
-    /*void DefLump_ErrorOutput(LTOKEN t, FileStream file, string e)
+    /*
+        Produces the lovely error message
+        when syntax errors are encountered.
+    
+    */
+    void DefLump_ErrorOutput(LTOKEN t, FileStream file, string e)
     {
+        string m = "";
         switch (t)
         {
             default:
             case T_IDKWHAT:
-                console.printf(string.Format("\t\t\cgZML ERROR! Code: \cx%s_(%d) \cg- Lump #\ci%d\cg, contains an unidentified error, starting at line # \cii:%d\cg(\cyf:%d\cg)!\n\t\t\tLine contents: \cc%s", 
-                    errorToString(t), t, file.LumpNumber, file.Line, file.Stream[file.Line].TrueLine, file.Stream[file.Line].FullLine()));
+                m = "UNIDENTIFIED ERROR!";
                 break;
             case T_IDKWHAT_OPENCOMMENT:
-                console.printf(string.Format("\t\t\cgZML ERROR! Code: \cx%s_(%d) \cg- Lump #\ci%d\cg, contains an unclosed block comment, starting at line # \cii:%d\cg(\cyf:%d\cg)!\n\t\t\tLine contents: \cc%s", 
-                    errorToString(t), t,  file.LumpNumber, file.Line, file.Stream[file.Line].TrueLine, file.Stream[file.Line].FullLine()));
+                m = "UNCLOSED BLOCK COMMENT!";
                 break;
             case T_IDKWHAT_INVALIDCHAR:
-                console.printf(string.Format("\t\t\cgZML ERROR! Code: \cx%s_(%d) \cg- Lump #\ci%d\cg, invalid character detected! Last known valid data started at line # \cii:%d\cg(\cyf:%d\cg)!\n\t\t\tLine contents: \cc%s", 
-                    errorToString(t), t,  file.LumpNumber, file.Line, file.Stream[file.Line].TrueLine, file.Stream[file.Line].FullLine()));
+                m = "INVALID CHARACTER DETECTED!";
                 break;
             case T_IDKWHAT_OPENSTRING:
-                console.printf(string.Format("\t\t\cgZML ERROR! Code: \cx%s_(%d) \cg- Lump #\ci%d\cg, unclosed string found! Last known valid data started at line # \cii:%d\cg(\cyf:%d\cg)!\n\t\t\tLine contents: \cc%s", 
-                    errorToString(t), t,  file.LumpNumber, file.Line, file.Stream[file.Line].TrueLine, file.Stream[file.Line].FullLine()));
+                m = "UNCLOSED STRING FOUND!";
                 break;
             case T_IDKWHAT_UNEXPECTEDCODE:
-                console.printf(string.Format("\t\t\cgZML ERROR! Code: \cx%s_(%d) \cg- Lump #\ci%d\cg, read unexpected character %s! Last known valid data started at line # \cii:%d\cg(\cyf:%d\cg)!\n\t\t\tLine contents: \cc%s", 
-                    errorToString(t), t,  file.LumpNumber, e, file.Line, file.Stream[file.Line].TrueLine, file.Stream[file.Line].FullLine()));
+                m = "UNEXPECTED CHARACTER READ!";
                 break;
+            case T_IDKWHAT_MISSINGCOMMA:
+                m = "COMMA (,) MISSING BETWEEN NAME AND TYPE OF ELEMENT!";
+                break;
+            case T_IDKWHAT_MISSINGEOB:
+                m = "END OF BLOCK (;) MISSING!";
         }
 
+        console.printf(string.Format("\t\t\cgZML ERROR! Code: \cx%s_(%d) \cg- Lump: #\ci%d\cg, Lump Hash: \ci%d\cg, Message: \ci%s\cg\n\t\t\t - Contents of Lexer: \ci%s \cg- Last known valid data started at line: #\cii:%d\cg(\cyf:%d\cg)!\n\t\t\t - Line contents: \cc%s",
+            errorToString(t), t, file.LumpNumber, file.LumpHash, m, e, file.Line, file.Stream[file.Line].TrueLine, file.Stream[file.Line].FullLine()));
+
         defParseFails++;
-    }*/
+    }
+
+    private string errorToString(LTOKEN t)
+    {
+        switch (t)
+        {
+            case T_IDKWHAT_OPENCOMMENT: return "OPENCOMMENT";
+            case T_IDKWHAT_INVALIDCHAR: return "INVALIDCHAR";
+            case T_IDKWHAT_OPENSTRING: return "OPENSTRING";
+            case T_IDKWHAT_UNEXPECTEDCODE: return "UNEXPECTEDCODE";
+            case T_IDKWHAT_MISSINGCOMMA: return "MISSINGCOMMA";
+            case T_IDKWHAT_MISSINGEOB : return "MISSINGEOB";
+            default:
+            case T_IDKWHAT: return "IDKWHAT";
+        }
+    }
 
     /* - END OF METHODS - */
 }

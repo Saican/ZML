@@ -9,6 +9,10 @@
 
 class Parser_ZXML
 {
+    Parser_ZXML Init()
+    {
+        return self;
+    }
 
-    
+    /* - END OF METHODS - */    
 }
