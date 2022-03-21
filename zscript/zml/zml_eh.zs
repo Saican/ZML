@@ -24,7 +24,7 @@ class ZMLHandler : EventHandler
         console.printf(fullGreeting);
 
         // Initialize internals
-        Parser_ZMLTag tagParser = new("Parser_ZMLTag").Init();
+        ZML_DefParser tagParser = new("ZML_DefParser").Init();
     }
 
     /* - END OF METHODS - */
