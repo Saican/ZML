@@ -98,6 +98,20 @@ class FileStream
         LumpHash;       // This value is calculated by hashing the contents of the lump and is used to eliminate duplicate reads
 
     /*
+        Wrapper for resetting the stream
+    */
+    void Reset() { Line = Head = 0; }
+
+    /*
+        Wrapper for the two steps it takes to move to the next line
+    */
+    void NexLine()
+    {
+        Line++;
+        Head = 0;
+    }
+
+    /*
         Returns the global index in the stream,
         which is the count of total characters
         read thus far.
@@ -144,6 +158,10 @@ class FileStream
         for each file, to be checked during lump read,
         otherwise the reader makes duplicates for some
         odd reason.
+
+        NOTE! The duplicate read problem is fixed, however
+        I decided to leave this feature more for informational
+        purposes now than anything; maybe a failsafe.
     
     */
     static int GetLumpHash(string rl)
@@ -167,13 +185,17 @@ class FileStream
     string CharAt(int line, int head) { return head < Stream[line].Length() ? Stream[line].Chars[head] : ""; }
 
     /*
+        Returns byte code of CharAt
+    */
+    int ByteAt(int line, int head) { return CharAt(line, head).ByteAt(0); }
+
+    /*
         Stream constructor
     
     */
     FileStream Init(string RawLump, int LumpNumber, bool mode = false)
     {
-        self.Line = 0;
-        self.Head = 0;
+        self.Reset();
         self.LumpNumber = LumpNumber;
         self.LumpHash = FileStream.GetLumpHash(RawLump);
 
@@ -194,7 +216,7 @@ class FileStream
             }
         }
 
-        //StreamOut();
+        //self.StreamOut();
 
         return self;
     }
@@ -243,6 +265,16 @@ class FileStream
         return s;
     }
 
+    /*
+        Wrapper of PeekTo, but will also return the byte code
+        It is assumed that the peek is for only one char
+    */
+    string, int PeekToB() 
+    {
+        string c = PeekTo();
+        return c, c.ByteAt(0);
+    }
+
     // Same as PeekTo, just does not move Head or Line
     string PeekFor(int at = -1, int len = 1)
     { 
@@ -271,10 +303,6 @@ class FileStream
         Returns the explicit line in the Stream to
         access next, but it does not directly set the
         Line member.  The parser will do that.
-
-        "from" is flagged "out", this should be the
-        read head of the parser and will be set
-        to the index to pick up at.
     
     */
     int PeekEnd (string c)
