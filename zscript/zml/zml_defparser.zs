@@ -239,8 +239,7 @@ class ZML_DefParser
     }
 
     /*
-        Checks each file for continuity - this means quotes are closed, braces are closed,etc.  
-        This does not check for line termination (semicolons); 
+        Checks each file for continuity - this means quotes are closed, braces are closed,etc.
 
         This function is a clusterfuck of just jfc...facepalm.
         *Head hits keyboard.
@@ -456,6 +455,36 @@ class ZML_DefParser
                             }
                         }
                     }
+                }
+            }
+        }
+
+        // Semicolon check - read each line, like normal
+        for (int i = 0; i < file.Lines(); i++)
+        {
+            // Read each char, like normal
+            for (int j = 0; j < file.LineLengthAt(i); j++)
+            {
+                // The line has to have a quote in it, 
+                // then the end of the line should either 
+                // be a semicolon or and open brace;
+                // I allow for both brace styles this way.
+                if (file.ByteAt(i, j) == CHAR_ID_DOUBLEQUOTE &&
+                    (file.ByteAt(i, file.LineLengthAt(i) - 1) != CHAR_ID_SEMICOLON ? 
+                        file.ByteAt(i, file.LineLengthAt(i) - 1) != CHAR_ID_OPENBRACE :
+                        false) &&
+                    file.ByteAt(i + 1, 0) != CHAR_ID_OPENBRACE)
+                {
+                    // Add missing semicolon to error list
+                    parseErrors.Push(new("StreamError").Init(StreamError.ERROR_ID_MISSINGEOB, 
+                        file.LumpNumber, 
+                        file.LumpHash, 
+                        "END OF BLOCK ( ; ) MISSING!", 
+                        "", 
+                        i, 
+                        file.Stream[i].TrueLine, 
+                        file.Stream[i].FullLine()));
+                    return false;
                 }
             }
         }

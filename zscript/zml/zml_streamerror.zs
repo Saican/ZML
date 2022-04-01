@@ -47,17 +47,17 @@ class StreamError
     {
         switch (t)
         {
-            case ERROR_ID_OPENCOMMENT: return "Starling : OPEN_COMMENT";
-            case ERROR_ID_INVALIDCHAR: return "Brewer's Blackbird : INVALID_CHAR";
-            case ERROR_ID_OPENSTRING: return "Crow : OPEN_STRING";
-            case ERROR_ID_UNEXPECTEDCODE: return "Grackle : UNEXPECTED_CODE";
-            case ERROR_ID_MISSINGCOMMA: return "Bobolink : MISSING_COMMA";
-            case ERROR_ID_MISSINGEOB: return "Great Cormorant : MISSING_EOB";
-            case ERROR_ID_MISSINGOPENBRACE: return "Magpie : MISSING_OPEN_BRACE";
-            case ERROR_ID_MISSINGCLOSEBRACE: return "Raven : MISSING_CLOSE_BRACE";
-            case ERROR_ID_UNKNOWNIDENTIFIER: return "Bronzed Cowbird : UNKNOWN_IDENTIFIER";
+            case ERROR_ID_OPENCOMMENT:          return "Cuban Bullfinch : OPEN_COMMENT";
+            case ERROR_ID_INVALIDCHAR:          return "Brewer's Blackbird : INVALID_CHAR";
+            case ERROR_ID_OPENSTRING:           return "Lark Bunting : OPEN_STRING";
+            case ERROR_ID_UNEXPECTEDCODE:       return "Hooded Crow : UNEXPECTED_CODE";
+            case ERROR_ID_MISSINGCOMMA:         return "Common Grackle : MISSING_COMMA";
+            case ERROR_ID_MISSINGEOB:           return "Great Cormorant : MISSING_EOB";
+            case ERROR_ID_MISSINGOPENBRACE:     return "Crested Myna : MISSING_OPEN_BRACE";
+            case ERROR_ID_MISSINGCLOSEBRACE:    return "Black Pheobe : MISSING_CLOSE_BRACE";
+            case ERROR_ID_UNKNOWNIDENTIFIER:    return "Bronzed Cowbird : UNKNOWN_IDENTIFIER";
             default:
-            case ERROR_ID_IDKWHAT: return "MOC_IDKWHAT";
+            case ERROR_ID_IDKWHAT: return "Murder_of_Crows_IDKWHAT";
         }
     }
 
