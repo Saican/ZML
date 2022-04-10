@@ -4,11 +4,13 @@ tag "tagthismofo","t_string";/*
     Who: Sarah Blackburn
     When: 05/02/22
 
-*/ tag "testtag", "t_none"
+*/ tag "testtag", "t_none";
 
 tag "zml", "t_none"
 {
-    //overwrite;
+    overwrite;
+    addtype;
+    obeyincoming;
 
     attributes
     {

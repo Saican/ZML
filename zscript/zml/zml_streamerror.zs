@@ -7,19 +7,23 @@
 
 class StreamError
 {
-    const ERROR_ID_IDKWHAT = -1;
-    const ERROR_ID_OPENCOMMENT = -2;
-    const ERROR_ID_INVALIDCHAR = -3;
-    const ERROR_ID_OPENSTRING = -4;
-    const ERROR_ID_UNEXPECTEDCODE = -5;
-    const ERROR_ID_MISSINGCOMMA = -6;
-    const ERROR_ID_MISSINGEOB = -7;
-    const ERROR_ID_MISSINGOPENBRACE = -8;
-    const ERROR_ID_MISSINGCLOSEBRACE = -9;
-    const ERROR_ID_UNKNOWNIDENTIFIER = -10;
+    enum ERRID
+    {
+        ERROR_ID_IDKWHAT,
+        ERROR_ID_OPENCOMMENT,
+        ERROR_ID_INVALIDCHAR,
+        ERROR_ID_OPENSTRING,
+        ERROR_ID_UNEXPECTEDCODE,
+        ERROR_ID_MISSINGCOMMA,
+        ERROR_ID_MISSINGEOB,
+        ERROR_ID_MISSINGOPENBRACE,
+        ERROR_ID_MISSINGCLOSEBRACE,
+        ERROR_ID_UNKNOWNIDENTIFIER,
+        ERROR_ID_EMPTYFILE,
+    };
 
-    int CodeId,
-        LumpNumber,
+    ERRID CodeId;
+    int LumpNumber,
         LumpHash,
         InternalLine,
         FileLine;
@@ -56,6 +60,7 @@ class StreamError
             case ERROR_ID_MISSINGOPENBRACE:     return "Crested Myna : MISSING_OPEN_BRACE";
             case ERROR_ID_MISSINGCLOSEBRACE:    return "Black Pheobe : MISSING_CLOSE_BRACE";
             case ERROR_ID_UNKNOWNIDENTIFIER:    return "Bronzed Cowbird : UNKNOWN_IDENTIFIER";
+            case ERROR_ID_EMPTYFILE:            return "Eurasian Blackbird : EMPTY_FILE";
             default:
             case ERROR_ID_IDKWHAT: return "Murder_of_Crows_IDKWHAT";
         }

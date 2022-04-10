@@ -7,9 +7,9 @@
 */
 
 
-class Parser_ZXML
+class ZML
 {
-    Parser_ZXML Init()
+    ZML Init()
     {
         return self;
     }

@@ -20,9 +20,9 @@ class ZMLElement
         t_unknown,
     };
 
-    NODETYPE type;
+    NODETYPE Type;
 
-    NODETYPE GetType(string e)
+    static NODETYPE GetType(string e)
     {
         string el = e.MakeLower();
         if (el ~== "t_string")
@@ -41,13 +41,12 @@ class ZMLElement
             return t_unknown;
     }
 
-    string name;
-    bool Empty() { return (name ~== "zml_empty"); }
+    string Name;
 
-    ZMLElement Init(string name, string type)
+    ZMLElement Init(string Name, string Type)
     {
-        self.name = name;
-        self.type = GetType(type);
+        self.Name = Name;
+        self.Type = GetType(Type);
         return self;
     }
 }
@@ -57,30 +56,19 @@ class ZMLTag : ZMLElement
 {
     enum HFLAG
     {
-        HF_strict,
-        HF_addtype,
-        HF_overwrite,
-        HF_obeyincoming,
+        HF_Strict,
+        HF_AddType,
+        HF_Overwrite,
+        HF_ObeyIncoming,
     };
-    HFLAG handling;
-    HFLAG stringToHFlag(string e)
-    {
-        if (e ~== "addtype")
-            return HF_addtype;
-        if (e ~== "overwrite")
-            return HF_overwrite;
-        if (e ~== "obeyincoming")
-            return HF_obeyincoming;
-        
-        return HF_strict;
-    }
+    HFLAG Handling;
 
-    array<ZMLElement> attributes;
+    array<ZMLElement> Attributes;
 
-    ZMLTag Init(string name, string type) 
+    ZMLTag Init(string Name, string Type) 
     {
-        handling = HF_strict;
-        return ZMLTag(super.Init(name, type)); 
+        Handling = HF_Strict;
+        return ZMLTag(super.Init(Name, Type)); 
     }
 }
 

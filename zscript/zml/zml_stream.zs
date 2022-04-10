@@ -20,6 +20,27 @@ class StreamLine
     array<string> Chars;
 
     int Length() { return Chars.Size(); }
+    /*
+        This was written when it was a possible bug
+        that the Chars array might contain empty slots
+        post-santization, therefore this was needed to
+        compare array.Size() versus the full condition
+        to determine if the bug was real.
+
+        UsedLength is preserved as an option for an edge-case
+        where the array may not be void of empty strings.
+    */
+    int UsedLength()
+    {
+        int tl = 0;
+        for (int i = 0; i < Chars.Size(); i++)
+        {
+            if (Chars[i] != "")
+                tl++;
+        }
+
+        return tl;
+    }
 
     /*
         Works like any other Mid function,

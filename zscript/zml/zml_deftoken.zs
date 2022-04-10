@@ -17,6 +17,7 @@ class DefToken
         WORD_FLAG_ADDTYPE,
         WORD_FLAG_OVERWRITE,
         WORD_FLAG_OBEYINCOMING,
+        WORD_TERMINATE,
         WORD_NONE,
     };
 
@@ -37,11 +38,29 @@ class DefToken
             return WORD_FLAG_OVERWRITE;
         if (e ~== "obeyincoming")
             return WORD_FLAG_OBEYINCOMING;
+        if (e ~== ";" || e ~== "}")
+            return WORD_TERMINATE;
 
         return WORD_NONE;
     }
 
-    DefToken Init(int t, int line, int start, int length)
+    static string TokenToString(int t)
+    {
+        switch (t)
+        {
+            case WORD_TAG: return "WORD_TAG";
+            case WORD_ATTRIBUTE: return "WORD_ATTRIBUTE";
+            case WORD_NAME: return "WORD_NAME";
+            case WORD_TYPE: return "WORD_TYPE";
+            case WORD_FLAG_ADDTYPE: return "WORD_FLAG_ADDTYPE";
+            case WORD_FLAG_OVERWRITE: return "WORD_FLAG_OVERWRITE";
+            case WORD_FLAG_OBEYINCOMING: return "WORD_FLAG_OBEYINCOMING";
+            case WORD_TERMINATE: return "WORD_TERMINATE";
+            default: return "WORD_NONE";
+        }
+    }
+
+    DefToken Init(int t, int line, int start = 0 , int length = 0)
     {
         self.t = t;
         self.line = line;
