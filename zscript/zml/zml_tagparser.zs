@@ -17,6 +17,19 @@ class ZMLTagParser
     const CHAR_ID_OPENBRACE = 123;
     const CHAR_ID_CLOSEBRACE = 125;
 
+    ZMLCharset DefCharSet;
+    private void makeCharset()
+    {
+        DefCharset.CodeChars.Push(CHAR_ID_DOUBLEQUOTE);
+        DefCharset.CodeChars.Push(CHAR_ID_ASTERISK);
+        DefCharset.CodeChars.Push(CHAR_ID_COMMA);
+        DefCharset.CodeChars.Push(CHAR_ID_BACKSLASH);
+        DefCharset.CodeChars.Push(CHAR_ID_SEMICOLON);
+        DefCharset.CodeChars.Push(CHAR_ID_UNDERSCORE);
+        DefCharset.CodeChars.Push(CHAR_ID_OPENBRACE);
+        DefCharset.CodeChars.Push(CHAR_ID_CLOSEBRACE);
+    }
+
     // Contents of each file
     array<FileStream> Streams;
 
@@ -30,6 +43,7 @@ class ZMLTagParser
     ZMLTagParser Init()
     {
         // Initialize internals
+        makeCharset();
         ParseErrorCount = 0;
         int streamSize = Generate_Streams();
         for (int i = 0; i < streamSize; i++)
@@ -44,7 +58,7 @@ class ZMLTagParser
                     false) : 
                 false)
                 // All of that worked?  Ok
-                Parse_DefLumps(Streams[i], parseList);
+                Parse(Streams[i], parseList);
             else
                 ParseErrorCount++;
         }
@@ -126,7 +140,7 @@ class ZMLTagParser
                     // Go back one char to  pick up the backslach
                     int ws = file.Head - 1;
                     // Find where the end of the comment is
-                    int nextLine = file.PeekEnd("*/");
+                    int nextLine = file.PeekEnd("*/", DefCharSet);
                     // Found it
                     if (nextLine != -1)
                     {
@@ -166,7 +180,7 @@ class ZMLTagParser
                     }
                     else
                     {
-                        /* Throw open comment error -2 */
+                        /* Throw open comment error */
                         ParseErrorList.Push(new("StreamError").Init(StreamError.ERROR_ID_OPENCOMMENT, 
                             file.LumpNumber, 
                             file.LumpHash, 
@@ -199,7 +213,7 @@ class ZMLTagParser
                 }
                 else
                 {
-                    /* Throw unexpected character error -5 */
+                    /* Throw unexpected character error */
                     ParseErrorList.Push(new("StreamError").Init(StreamError.ERROR_ID_UNEXPECTEDCODE, 
                         file.LumpNumber, 
                         file.LumpHash, 
@@ -250,7 +264,7 @@ class ZMLTagParser
             int b;
             [c, b] = file.PeekToB();
             // Check it's a valid char
-            if (file.IsCodeChar(b))
+            if (file.IsCodeChar(b, DefCharSet))
             {
                 // Yes, what is it? Increment that counter.
                 switch (b)
@@ -264,7 +278,7 @@ class ZMLTagParser
             // No, ok, it's not an underscore right, that's valid too, is it alpha-numeric?
             else if (b != CHAR_ID_UNDERSCORE && !file.IsAlphaNum(b))
             {
-                // Nope, add invalid char to error list -3
+                // Nope, add invalid char to error list 
                 ParseErrorList.Push(new("StreamError").Init(StreamError.ERROR_ID_INVALIDCHAR, 
                     file.LumpNumber, 
                     file.LumpHash, 
@@ -337,7 +351,7 @@ class ZMLTagParser
                         // There was not, that would be the problem line
                         if (!bc)
                         {
-                            // Add missing comma to error list -6
+                            // Add missing comma to error list 
                             ParseErrorList.Push(new("StreamError").Init(StreamError.ERROR_ID_MISSINGCOMMA, 
                                 file.LumpNumber, 
                                 file.LumpHash, 
@@ -506,7 +520,7 @@ class ZMLTagParser
             // Now the basic check is, does the main buffer have something in it
             // and does the temp buffer contain a code char?
             // But, if we've got a semicolon or close brace, those result in tokens.
-            if (e.Length() > 0 && file.IsCodeChar(et.ByteAt(0)) &&
+            if (e.Length() > 0 && file.IsCodeChar(et.ByteAt(0), DefCharSet) &&
                 et.ByteAt(0) != CHAR_ID_SEMICOLON && et.ByteAt(0) != CHAR_ID_CLOSEBRACE)
             {
                 ParseErrorList.Push(new("StreamError").Init(StreamError.ERROR_ID_UNKNOWNIDENTIFIER,
@@ -685,7 +699,7 @@ class ZMLTagParser
         Turns the token list into xml tags
         The "getting here" tho
     */
-    private void Parse_DefLumps(in out FileStream file, in out array<DefToken> parseList)
+    private void Parse(in out FileStream file, in out array<DefToken> parseList)
     {
         // Check that the list has something in it
         if (parseList.Size() > 0)

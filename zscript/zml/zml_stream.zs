@@ -103,7 +103,8 @@ class StreamLine
 
 /*
     This is the actual "file stream" representation of the file.
-    The string that is read
+    The string that is read from a file, called the "raw lump",
+    is processed into an array structure of characters.
 
 */
 class FileStream
@@ -237,7 +238,7 @@ class FileStream
             }
         }
 
-        //self.StreamOut();
+        self.StreamOut();
 
         return self;
     }
@@ -296,26 +297,6 @@ class FileStream
         return c, c.ByteAt(0);
     }
 
-    // Same as PeekTo, just does not move Head or Line
-    string PeekFor(int at = -1, int len = 1)
-    { 
-        string s = "";
-        int h = at == -1 ? Head : at, 
-            l = Line;
-        if (!(len > 0 && len <= Stream[Line].Length()))
-        {
-            console.printf("\cgPeekFor got bullshit length?!");
-            return s;
-        }
-
-        for (int i = 0; i < len; i++)
-            s.AppendFormat("%s", Stream[l].Chars[i + h]);
-
-        console.printf(string.Format("\chPeekFor\cc, Line: %d, Head: %d, len: %d, Line Length: %d, Peek Contents: %s", Line, Head, len, Stream[Line].Length(), s));
-
-        return s;       
-    }
-
     /*
         PeekEnd - a.k.a. Get End of Block
 
@@ -323,10 +304,13 @@ class FileStream
 
         Returns the explicit line in the Stream to
         access next, but it does not directly set the
-        Line member.  The parser will do that.
+        Line member.  The parser should check the
+        return before setting Line.
+
+        PeekEnd does set Head.
     
     */
-    int PeekEnd (string c)
+    int PeekEnd (string c, ZMLCharSet cs)
     {
         // Check each line, including this one
         int r = Head;
@@ -335,12 +319,10 @@ class FileStream
             for (int j = r; j < Stream[i].Length(); j++)
             {
                 console.printf(string.format("Looking for character: %s -- Examining character, line %d, head %d, %s", c, i, j, CharAt(i, j)));
-                if ((CharAt(i, j).ByteAt(0) == c.ByteAt(0)) &&              // Does the first character match?
-                    (c.Length() == 2 ?                                      // Do we need to look for a second character?
-                        (j + 1 < Stream[i].Length() ?                         // Yes, do we have stream left to look at?
-                            (CharAt(i, j + 1).ByteAt(0) == c.ByteAt(1)) :   // Yes, check next character 
-                            false) :                                        // No, end of the line
-                        true))                                              // No, skip this check
+                if ((CharAt(i, j).ByteAt(0) == c.ByteAt(0)) &&      // Does the first character match?
+                    (c.Length() > 1 ?                               // Do we need to look for more characters?
+                        mul_charCheck(c, i, j) :                    // Yes, get the result of Multi-Char Check
+                        true))                                      // No, skip this check, good that's a loop in a check
                 {
                     // Is there more after?
                     if (j + c.Length() < Stream[i].Length())
@@ -357,7 +339,7 @@ class FileStream
                         return i + 1;
                     }
                 }
-                else if (c.Length() == 1 && IsCodeChar(Stream[i].Chars[j].ByteAt(0)))
+                else if (c.Length() == 1 && IsCodeChar(Stream[i].Chars[j].ByteAt(0), cs))
                     return -1;
             }
             r = 0;
@@ -367,12 +349,34 @@ class FileStream
     }
 
     /*
+        Multi-Char Check - lets PeekEnd look for more than two characters as a terminator sequence.  Yay!
+    */
+    private bool mul_charCheck(string c, int l, int h)
+    {
+        int q = 1;
+        if (h + c.Length() - 1 < Stream[l].Length())
+        {
+            for (int i = 1; i < c.Length(); i++)
+            {
+                if (CharAt(l, h + i).ByteAt(0) == c.ByteAt(i))
+                    q++;
+            }
+            return (q == c.Length());
+        }
+        else
+            return false;
+    }
+
+    /*
         Returns boolean, checks if given string is a code character
     */
-    bool IsCodeChar(int b)
+    bool IsCodeChar(int b, in ZMLCharSet cs)
     {
-        if (b == 34 || b == 44 || b == 123 || b == 125 || b == 59 || b == 47 || b == 42)
-            return true;
+        for (int i = 0; i < cs.CodeChars.Size(); i++)
+        {
+            if (b == cs.CodeChars[i])
+                return true;
+        }
 
         return false;
     }

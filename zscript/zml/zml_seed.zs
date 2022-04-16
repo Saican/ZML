@@ -23,13 +23,17 @@ class ZMLSeed : actor
         radius 1;
     }
 
-    ZMLTree ZTree;
+    ZMLNode XmlTree;
+    bool Accessible;
 
     override void PostBeginPlay()
     {
-        self.ZTree = new("ZMLTree").Init();
+        self.Accessible = false;
         super.PostBeginPlay();
     }
+
+    clearscope void FindElements(string namespace, out array<ZMLNode> nodes)
+    {}
 
     states
     {

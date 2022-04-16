@@ -11,7 +11,7 @@
 */
 
 
-class ZMLNode
+/*class ZMLNode
 {
     ZMLNode left, right;
     int data, height;
@@ -23,15 +23,42 @@ class ZMLNode
         self.height = 0;
         return self;
     }
-}
+}*/
 
-class ZMLTree
+class ZMLNode
 {
-    ZMLNode root;
+    ZMLNode root,       // Children tree
+        left, right;    // Sibling trees
+    int height,
+        weight;
 
-    ZMLTree Init() 
+    string Name,
+        Data;
+
+    ZMLNode GetChild(string n)
+    { return null; }
+
+    int Hash(string d)
+    {
+        int a = 54059;
+        int b = 76963;
+        int c = 86969;
+        int h = 37;
+        for (int i = 0; i < d.Length(); i++)
+            h = (h * a) ^ (d.ByteAt(i) * b);
+
+        return h % c;
+    }
+
+    string HashString() { return string.Format("%szml%s", Name, Data); }
+
+    ZMLNode Init(string Name, string Data) 
     { 
-        self.root = null; 
+        self.root = self.left = self.right = null; 
+        self.height = 0;
+        self.Name = Name;
+        self.Data = Data;
+        self.weight = Hash(HashString());
         return self;
     }
 
@@ -126,22 +153,22 @@ class ZMLTree
         return tp2; 
     }
 
-    ZMLNode insert(ZMLNode r,int data)
+    ZMLNode insert(ZMLNode r, string Name, string Data)
     {      
         if (!r)
         {
             ZMLNode n;
-            n = new("ZMLNode").Init(data);
+            n = new("ZMLNode").Init(Name, Data);
             r = n;
             r.height = 1; 
             return r;             
         }
         else
         {
-            if (data < r.data)
-                r.left = insert(r.left, data);
+            if (weight < r.weight)
+                r.left = insert(r.left, Name, Data);
             else
-                r.right = insert(r.right, data);
+                r.right = insert(r.right, Name, Data);
         }
 
         r.height = calc_height(r);
@@ -158,7 +185,7 @@ class ZMLTree
         return r;
     }
  
-    ZMLNode deleteNode(ZMLNode p,int data)
+    ZMLNode deleteNode(ZMLNode p, int weight)
     {
         if (!p.left && !p.right)
         {
@@ -169,23 +196,29 @@ class ZMLTree
 
         ZMLNode t;
         ZMLNode q;
-        if (p.data < data)
-            p.right = deleteNode(p.right, data);
-        else if (p.data > data)
-            p.left = deleteNode(p.left, data);
+        if (p.weight < weight)
+            p.right = deleteNode(p.right, weight);
+        else if (p.weight > weight)
+            p.left = deleteNode(p.left, weight);
         else
         {
             if (p.left)
             {
                 q = inpre(p.left);
-                p.data = q.data;
-                p.left = deleteNode(p.left, q.data);
+                p.Name = q.Name;
+                p.Data = q.Data;
+                p.root = q.root;
+                p.weight = q.weight;
+                p.left = deleteNode(p.left, q.weight);
             }
             else
             {
                 q = insuc(p.right);
-                p.data = q.data;
-                p.right = deleteNode(p.right, q.data);
+                p.Name = q.Name;
+                p.Data = q.Data;
+                p.root = q.root;
+                p.weight = q.weight;
+                p.right = deleteNode(p.right, q.weight);
             }
         }
 

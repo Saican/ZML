@@ -11,6 +11,9 @@ class ZMLHandler : EventHandler
 {
     string ZMLVersion;
 
+    private actor SeedPawn;
+    private bool Spawn;
+
     override void OnRegister()
     {
         // This mess creates the nice greeting ZML sends to the console.
@@ -23,8 +26,45 @@ class ZMLHandler : EventHandler
             fullGreeting.AppendFormat("%s", "-");
         console.printf(fullGreeting);
 
-        // Initialize internals
-        ZMLTagParser tagParser = new("ZMLTagParser").Init();
+        // Next we need to see if the level has a weed - if it does then ZML does nothing
+        ThinkerIterator weedFinder = ThinkerIterator.Create("ZMLWeed");
+        actor weedPawn = ZMLWeed(weedFinder.Next());
+        if (weedPawn)
+        {
+            SeedPawn = null;
+            Spawn = false;
+            console.Printf("\cq\t\t - - ZML is disabled due to a weed in this level!");
+        }
+        else
+        {
+            // Ok, no weed, guess we better do our job then
+            // Find out if there's a seed
+            ThinkerIterator seedFinder = ThinkerIterator.Create("ZMLSeed");
+            SeedPawn = ZMLSeed(seedFinder.Next());
+            if (SeedPawn) // Yes, do nothing, WorldTick will initialize
+                console.Printf("\cx\t\t - - ZML seed found!");
+            else // Nope, WorldTick needs to spawn it too
+                Spawn = true;
+        }
+    }
+
+    override void WorldTick()
+    {
+        if (SeedPawn)
+        {
+            ZXMLParser zml = new("ZXMLParser").Init(SeedPawn, new("ZMLTagParser").Init().TagList);
+            ZMLSeed(SeedPawn).Accessible = true;
+            SeedPawn = null;
+            console.Printf("\cf\t\t - - ZML has finished growing the XML tree!");
+        }
+        else if (Spawn)
+        {
+            [Spawn, SeedPawn] = players[consoleplayer].mo.A_SpawnItemEx("ZMLSeed");
+            if (Spawn && SeedPawn)
+                console.Printf("\cx\t\t - - ZML seed created!"); 
+
+            Spawn = false;
+        }
     }
 
     /* - END OF METHODS - */

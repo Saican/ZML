@@ -20,6 +20,8 @@ class StreamError
         ERROR_ID_MISSINGCLOSEBRACE,
         ERROR_ID_UNKNOWNIDENTIFIER,
         ERROR_ID_EMPTYFILE,
+        ERROR_ID_MISSINGLESSTHAN,
+        ERROR_ID_MISSINGGREATERTHAN,
     };
 
     ERRID CodeId;
@@ -47,6 +49,35 @@ class StreamError
         return self;
     }
 
+    /*
+        WHAT IS WITH THE BIRD CODES?
+
+        lol, ok, this parser is actually version 3, not version 0.1.
+        It's version 0.1, the functional parser.
+
+        This is version 3 of the code body itself, the first version to reach
+        production versioning.
+
+        Version 1 did not work at all.  Version 2 resulted from some study of
+        the concept of parsers and other peoples' code.  It worked but did not
+        error check.  It worked on a principle I called the "boolean flock",
+        basically a bunch of switches to establish "context" to the parser.
+
+        Version 2 was unmanagable because of the boolean flock, so I started
+        again, salvaging a few things, but with one goal, kill the flock.  In real 
+        life, someone had happened to mention that a flock of crows is called a 
+        murder of crows, and because I am a fan of Incubus, especially A Crow Left 
+        of the Murder, I named the new working parser concept, Murdered Crows, 
+        because I had done just that, I had killed the flock. I now had a working 
+        parser concept!
+
+        The error messages are a celebration of that event, when I killed the flock.
+            - Maybe this is the spiritual successor?
+        ZMLDEFS error codes are all types of blackbirds.
+        XML errors are different parots!
+
+        I also love birds!
+    */
     private string errorToString(int t)
     {
         switch (t)
@@ -61,6 +92,8 @@ class StreamError
             case ERROR_ID_MISSINGCLOSEBRACE:    return "Black Pheobe : MISSING_CLOSE_BRACE";
             case ERROR_ID_UNKNOWNIDENTIFIER:    return "Bronzed Cowbird : UNKNOWN_IDENTIFIER";
             case ERROR_ID_EMPTYFILE:            return "Eurasian Blackbird : EMPTY_FILE";
+            case ERROR_ID_MISSINGLESSTHAN:      return "Fischer's Lovebird : MISSING_LESS_THAN";
+            case ERROR_ID_MISSINGGREATERTHAN:   return "Rosella Parakeet : MISSING_GREATER_THAN";
             default:
             case ERROR_ID_IDKWHAT: return "Murder_of_Crows_IDKWHAT";
         }
