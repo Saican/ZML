@@ -19,4 +19,5 @@ version "4.2.1"
 #include "zscript/zml/zml_streamerror.zs"
 #include "zscript/zml/zml_tagparser.zs"
 #include "zscript/zml/zml_xmlparser.zs"
+#include "zscript/zml/zml_xmltoken.zs"
 

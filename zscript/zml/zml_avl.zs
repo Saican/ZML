@@ -10,27 +10,12 @@
 
 */
 
-
-/*class ZMLNode
-{
-    ZMLNode left, right;
-    int data, height;
-
-    ZMLNode Init(int data = 0)
-    {
-        self.left = self.right = null;
-        self.data = data;
-        self.height = 0;
-        return self;
-    }
-}*/
-
 class ZMLNode
 {
-    ZMLNode root,       // Children tree
-        left, right;    // Sibling trees
-    int height,
-        weight;
+    ZMLNode Root,       // Children tree
+        Left, Right;    // Sibling trees
+    int Height,
+        Weight;
 
     string Name,
         Data;
@@ -50,43 +35,41 @@ class ZMLNode
         return h % c;
     }
 
-    string HashString() { return string.Format("%szml%s", Name, Data); }
-
-    ZMLNode Init(string Name, string Data) 
+    ZMLNode Init(string Name, string FileName, string Data) 
     { 
-        self.root = self.left = self.right = null; 
-        self.height = 0;
+        self.Root = self.Left = self.Right = null; 
+        self.Height = 0;
         self.Name = Name;
         self.Data = Data;
-        self.weight = Hash(HashString());
+        self.Weight = Hash(FileName);
         return self;
     }
 
-    int calc_height(ZMLNode p)
+    int calc_Height(ZMLNode p)
     {
-        if (p.left && p.right)
+        if (p.Left && p.Right)
         {
-            if (p.left.height < p.right.height)
-                return p.right.height + 1;
+            if (p.Left.Height < p.Right.Height)
+                return p.Right.Height + 1;
             else
-                return p.left.height + 1;
+                return p.Left.Height + 1;
         }
-        else if (p.left && !p.right)
-            return p.left.height + 1;
-        else if (!p.left && p.right)
-            return p.right.height + 1;
+        else if (p.Left && !p.Right)
+            return p.Left.Height + 1;
+        else if (!p.Left && p.Right)
+            return p.Right.Height + 1;
 
         return 0;
     }
 
     int getBalance(ZMLNode n)
     {
-        if (n.left && n.right)
-            return n.left.height - n.right.height; 
-        else if (n.left && !n.right)
-            return n.left.height; 
-        else if (!n.left && n.right )
-            return -n.right.height;
+        if (n.Left && n.Right)
+            return n.Left.Height - n.Right.Height; 
+        else if (n.Left && !n.Right)
+            return n.Left.Height; 
+        else if (!n.Left && n.Right )
+            return -n.Right.Height;
 
         return 0;
     }
@@ -96,10 +79,10 @@ class ZMLNode
         ZMLNode p;
         ZMLNode tp;
         p = n;
-        tp = p.left;
+        tp = p.Left;
 
-        p.left = tp.right;
-        tp.right = p;
+        p.Left = tp.Right;
+        tp.Right = p;
 
         return tp; 
     }
@@ -110,10 +93,10 @@ class ZMLNode
         ZMLNode p;
         ZMLNode tp;
         p = n;
-        tp = p.right;
+        tp = p.Right;
 
-        p.right = tp.left;
-        tp.left = p;
+        p.Right = tp.Left;
+        tp.Left = p;
 
         return tp; 
     }
@@ -125,13 +108,13 @@ class ZMLNode
         ZMLNode tp;
         ZMLNode tp2;
         p = n;
-        tp = p.right;
-        tp2 = p.right.left;
+        tp = p.Right;
+        tp2 = p.Right.Left;
 
-        p.right = tp2.left;
-        tp.left = tp2.right;
-        tp2.left = p;
-        tp2.right = tp; 
+        p.Right = tp2.Left;
+        tp.Left = tp2.Right;
+        tp2.Left = p;
+        tp2.Right = tp; 
         
         return tp2; 
     }
@@ -142,97 +125,97 @@ class ZMLNode
         ZMLNode tp;
         ZMLNode tp2;
         p = n;
-        tp = p.left;
-        tp2 = p.left.right;
+        tp = p.Left;
+        tp2 = p.Left.Right;
 
-        p.left = tp2.right;
-        tp.right = tp2.left;
-        tp2.right = p;
-        tp2.left = tp; 
+        p.Left = tp2.Right;
+        tp.Right = tp2.Left;
+        tp2.Right = p;
+        tp2.Left = tp; 
         
         return tp2; 
     }
 
-    ZMLNode insert(ZMLNode r, string Name, string Data)
+    ZMLNode insert(ZMLNode r, string Name, string FileName, string Data)
     {      
         if (!r)
         {
             ZMLNode n;
-            n = new("ZMLNode").Init(Name, Data);
+            n = new("ZMLNode").Init(Name, FileName, Data);
             r = n;
-            r.height = 1; 
+            r.Height = 1; 
             return r;             
         }
         else
         {
-            if (weight < r.weight)
-                r.left = insert(r.left, Name, Data);
+            if (Weight < r.Weight)
+                r.Left = insert(r.Left, Name, FileName, Data);
             else
-                r.right = insert(r.right, Name, Data);
+                r.Right = insert(r.Right, Name, FileName, Data);
         }
 
-        r.height = calc_height(r);
+        r.Height = calc_Height(r);
 
-        if (getBalance(r) == 2 && getBalance(r.left) == 1)
+        if (getBalance(r) == 2 && getBalance(r.Left) == 1)
             r = llrotation(r);
-        else if (getBalance(r) == -2 && getBalance(r.right) == -1)
+        else if (getBalance(r) == -2 && getBalance(r.Right) == -1)
             r = rrrotation(r);
-        else if (getBalance(r) == -2 && getBalance(r.right) == 1)
+        else if (getBalance(r) == -2 && getBalance(r.Right) == 1)
             r = rlrotation(r);
-        else if (getBalance(r) == 2 && getBalance(r.left) == -1)
+        else if (getBalance(r) == 2 && getBalance(r.Left) == -1)
             r = lrrotation(r);
 
         return r;
     }
  
-    ZMLNode deleteNode(ZMLNode p, int weight)
+    ZMLNode deleteNode(ZMLNode p, int Weight)
     {
-        if (!p.left && !p.right)
+        if (!p.Left && !p.Right)
         {
-            if (p == self.root)
-                self.root = null;
+            if (p == self.Root)
+                self.Root = null;
             return null;
         }
 
         ZMLNode t;
         ZMLNode q;
-        if (p.weight < weight)
-            p.right = deleteNode(p.right, weight);
-        else if (p.weight > weight)
-            p.left = deleteNode(p.left, weight);
+        if (p.Weight < Weight)
+            p.Right = deleteNode(p.Right, Weight);
+        else if (p.Weight > Weight)
+            p.Left = deleteNode(p.Left, Weight);
         else
         {
-            if (p.left)
+            if (p.Left)
             {
-                q = inpre(p.left);
+                q = inpre(p.Left);
                 p.Name = q.Name;
                 p.Data = q.Data;
-                p.root = q.root;
-                p.weight = q.weight;
-                p.left = deleteNode(p.left, q.weight);
+                p.Root = q.Root;
+                p.Weight = q.Weight;
+                p.Left = deleteNode(p.Left, q.Weight);
             }
             else
             {
-                q = insuc(p.right);
+                q = insuc(p.Right);
                 p.Name = q.Name;
                 p.Data = q.Data;
-                p.root = q.root;
-                p.weight = q.weight;
-                p.right = deleteNode(p.right, q.weight);
+                p.Root = q.Root;
+                p.Weight = q.Weight;
+                p.Right = deleteNode(p.Right, q.Weight);
             }
         }
 
-        if (getBalance(p) == 2 && getBalance(p.left) == 1)
+        if (getBalance(p) == 2 && getBalance(p.Left) == 1)
             p = llrotation(p);
-        else if (getBalance(p) == 2 && getBalance(p.left) == -1)
+        else if (getBalance(p) == 2 && getBalance(p.Left) == -1)
             p = lrrotation(p);
-        else if (getBalance(p) == 2 && getBalance(p.left) == 0)
+        else if (getBalance(p) == 2 && getBalance(p.Left) == 0)
             p = llrotation(p);
-        else if (getBalance(p) == -2 && getBalance(p.right) == -1)
+        else if (getBalance(p) == -2 && getBalance(p.Right) == -1)
             p = rrrotation(p);
-        else if (getBalance(p) == -2 && getBalance(p.right) == 1)
+        else if (getBalance(p) == -2 && getBalance(p.Right) == 1)
             p = rlrotation(p);
-        else if (getBalance(p) == -2 && getBalance(p.right) == 0)
+        else if (getBalance(p) == -2 && getBalance(p.Right) == 0)
             p = llrotation(p);
 
         return p;
@@ -240,16 +223,16 @@ class ZMLNode
     
     ZMLNode inpre(ZMLNode p)
     {
-        while (p.right)
-            p = p.right;
+        while (p.Right)
+            p = p.Right;
 
         return p;    
     }
 
     ZMLNode insuc(ZMLNode p)
     {
-        while(p.left)
-            p = p.left;
+        while(p.Left)
+            p = p.Left;
 
         return p;    
     }

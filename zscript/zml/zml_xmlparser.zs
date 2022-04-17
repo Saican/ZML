@@ -4,6 +4,13 @@
     Who: Sarah Blackburn
     When: 05/03/22
 
+    Note that because a LOT of the groundwork for
+    this code was done in the tag parser and the
+    file stream, the comments may be a bit lacking
+    here.  Please refer to the tag parser for more
+    detailed documentation of the inner workings,
+    as both parsers are very similar in function.
+
 */
 
 
@@ -54,10 +61,10 @@ class ZXMLParser
         int transStreamSize = Generate_Streams();
         for (int i = 0; i < transStreamSize; i++)
         {
-            array<DefToken> parseList;
+            array<XMLToken> parseList;
             if (Sanitize_StreamComments(TranslationStreams[i]) ?
-                (Check_StreamContinuity(TranslationStreams[i]) ? 
-                    Tokenize(TranslationStreams[i], parseList) :
+                (Check_StreamContinuity(TranslationStreams[i], TagList) ? 
+                    Tokenize(TranslationStreams[i], TagList, parseList) :
                     false) :
                 false)
                 Parse(TranslationStreams[i], parseList, Seed);
@@ -66,10 +73,10 @@ class ZXMLParser
         int defStreamSize = Generate_DefinitionStreams(Seed);
         for (int i = 0; i < defStreamSize; i++)
         {
-            array<DefToken> parseList;
+            array<XMLToken> parseList;
             if (Sanitize_StreamComments(DefinitionStreams[i]) ?
-                (Check_StreamContinuity(DefinitionStreams[i]) ? 
-                    Tokenize(DefinitionStreams[i], parseList) :
+                (Check_StreamContinuity(DefinitionStreams[i], TagList) ? 
+                    Tokenize(DefinitionStreams[i], TagList, parseList) :
                     false) :
                 false)
                 Parse(DefinitionStreams[i], parseList, Seed);
@@ -209,7 +216,7 @@ class ZXMLParser
         return true;
     }  
 
-    private bool Check_StreamContinuity(in out FileStream file)
+    private bool Check_StreamContinuity(in out FileStream file, in array<ZMLTag> TagList)
     {
         // A few syntax chars can be reliably 
         // checked for by just counting them,
@@ -217,13 +224,18 @@ class ZXMLParser
         int qc = 0,     // Quote count
             ltc = 0,    // Less than count
             gtc = 0;    // Greater than count
+        // This is a standard file loop that checks for the end of the file
         while (file.StreamIndex() < file.StreamLength())
         {
-            string c;
+            // PeekToB returns string, bool
+            string c; // we want the string for error output
             int b;
+            // Either PeekTo function will move Line and Head, basically "turning the wheel"
             [c, b] = file.PeekToB();
+            // Chcek if it's any of the syntax chars
             if (file.IsCodeChar(b, XMLCharSet))
             {
+                // Whichever one it is, we're interested in these.
                 switch (b)
                 {
                     case CHAR_ID_DOUBLEQUOTE: qc++; break;
@@ -231,6 +243,7 @@ class ZXMLParser
                     case CHAR_ID_GREATERTHAN: gtc++; break;
                 }
             }
+            // Nope invalid char error
             else if (b != CHAR_ID_UNDERSCORE && !file.IsAlphaNum(b))
             {
                 // Nope, add invalid char to error list 
@@ -246,6 +259,7 @@ class ZXMLParser
             }
         }
 
+        // When done with a file, reset the file, downstream it's used again
         file.Reset();
 
         // Quote count - should be 2 for each word, thus remainder should be 0
@@ -282,10 +296,12 @@ class ZXMLParser
         // Tag bracket count
         if (ltc != gtc)
         {
+            // Go line by line
             for (int i = 0; i < file.Lines(); i++)
             {
                 int lltc = 0,
-                    lgtc = 0;       
+                    lgtc = 0; 
+                // Read each char and count the number of brackets      
                 for (int j = 0; j < file.LineLengthAt(i); j++)
                 {
                     if (file.ByteAt(i, j) == CHAR_ID_LESSTHAN)
@@ -294,6 +310,7 @@ class ZXMLParser
                         lgtc++;
                 }
 
+                // They weren't equal on that line so that's the error line, the error code can figure out which error it is.
                 if (lltc != lgtc)
                 {
                     ParseErrorList.Push(new("StreamError").Init(lltc < lgtc ? StreamError.ERROR_ID_MISSINGLESSTHAN : StreamError.ERROR_ID_MISSINGGREATERTHAN, 
@@ -309,15 +326,261 @@ class ZXMLParser
             }
         }
 
+        // Terminated tags
+        // Establish a buffer
+        string e = "";
+        // Setup a regular file read loop
+        while(file.StreamIndex() < file.StreamLength())
+        {
+            // Fill the buffer, one char at a time
+            e.AppendFormat("%s", file.PeekTo());
+
+            // Check that the buffer contains a less than symbol and the next char is not a backslash
+            if (e.ByteAt(0) == CHAR_ID_LESSTHAN && file.PeekB() != CHAR_ID_BACKSLASH)
+            {
+                string st = "",
+                    ct = "";
+                // Read the line from where Head is
+                for (int i = file.Head; i < file.LineLength(); i++)
+                {
+                    st.AppendFormat("%s", file.CharAt(file.Line, i));
+                    // Check if the temp buffer contains a tag name
+                    for (int j = 0; j < TagList.Size(); j++)
+                    {
+                        // It does, format the closing tag
+                        if (st == TagList[j].Name)
+                        {
+                            ct = string.Format("</%s>", TagList[j].Name);
+                            break;
+                        }
+                    }
+
+                    if (ct != "")
+                        break;
+                }
+
+                // Check we have a closing tag to look for
+                if (ct != "")
+                {
+                    // Take advantage of how PeekEnd will just look for whatever now
+                    int ws = file.Head;
+                    int nextLine = file.PeekEnd(ct, XMLCharSet);
+                    // If nextLine is -1 then the closing tag wasn't found
+                    // So push unterminated tag error
+                    if (nextLine == -1)
+                    {
+                        ParseErrorList.Push(new("StreamError").Init(StreamError.ERROR_ID_UNCLOSEDTAG, 
+                            file.LumpNumber, 
+                            file.LumpHash, 
+                            "UNTERMINATED TAG DETECTED!", 
+                            e, 
+                            file.Line, 
+                            file.Stream[file.Line].TrueLine, 
+                            file.Stream[file.Line].FullLine()));
+                        return false;  
+                    }
+                    // Good the closing tag was found, find the end of it and set head there.
+                    // PeekEnd will have set head to who knows what, we need to pick up from
+                    // end of the opening tag, there might be another tag right behind it.
+                    else
+                    {
+                        for (int i = ws; i < file.LineLength(); i++)
+                        {
+                            if (file.ByteAt(file.Line, i) == CHAR_ID_GREATERTHAN)
+                            {
+                                file.Head = i;
+                                break;
+                            }
+                        }
+                    }
+                }
+                // Nope throw unknown xml identifier
+                else
+                {
+                    ParseErrorList.Push(new("StreamError").Init(StreamError.ERROR_ID_UNKNOWN_XML_IDENTIFIER,
+                    file.LumpNumber,
+                    file.LumpHash,
+                    "UNKNOWN XML IDENTIFIER (TAG) DETECTED!",
+                    st,
+                    file.Line,
+                    file.Stream[file.Line].TrueLine,
+                    file.Stream[file.Line].FullLine()));
+                return false;   
+                }   
+            }
+            // I feel like we do a lot of buffer purging
+            e = "";
+        }
+        // What you supposed to do after messing with a file?  That's right!  Reset it!
+        file.Reset();
+
+        // Attributes - check that tags with attributes have their attributes spelled right
+        e = ""; // Reuse e since it's scoped outside loops
+        // Setup another read loop
+        while (file.StreamIndex() < file.StreamLength())
+        {
+            // Fill the buffer
+            e.AppendFormat("%s", file.PeekTo());
+            // Check for a tag bracket and that the next char isn't a backslash
+            if (e.ByteAt(0) == CHAR_ID_LESSTHAN && file.PeekB() != CHAR_ID_BACKSLASH)
+            {
+                // Set up temp buffers and info
+                string st = "",     // Starting tag buffer
+                    at;             // Attribute buffer
+                bool ga = false;    // Got attribute
+                int nh = 0;         // New Head
+                // Read through the rest of the line
+                for (int i = file.Head; i < file.LineLength(); i++)
+                {
+                    // Store tag chars in the temp buffer
+                    st.AppendFormat("%s", file.CharAt(file.Line, i));
+                    // Ok read through the tags and see if the buffer is a tag
+                    for (int j = 0; j < TagList.Size(); j++)
+                    {
+                        // It is and it has attributes - yay...
+                        if (st == TagList[j].Name && TagList[j].Attributes.Size() > 0)
+                        {
+                            at = "";
+                            // Read through the line again - luckily we just keep picking up where we left off
+                            for (int k = i + 1; k < file.LineLength(); k++)
+                            {
+                                // More temp buffering
+                                at.AppendFormat("%s", file.CharAt(file.Line, k));
+                                // Ok this time compare the temp buffer to the attribute list
+                                for (int m = 0; m < TagList[j].Attributes.Size(); m++)
+                                {
+                                    // And there is it, actually valid, took i, j, k, and m to get here!
+                                    if (at == TagList[j].Attributes[m].Name)
+                                    {
+                                        ga = true;
+                                        nh = k + 1;
+                                        break;
+                                    }
+                                }
+
+                                // ga is right lol, get out of the loop
+                                if (ga)
+                                    break;
+                            }
+                        }
+                        // Ok its still a valid tag so we can jump over it
+                        else if (st == TagList[j].Name)
+                        {
+                            ga = true;
+                            nh = i + 1;
+                        }
+
+                        // Gotta scream a few times to get out of all the loops
+                        if (ga)
+                            break;
+                    }
+
+                    // One more time
+                    if (ga)
+                        break;
+                }
+
+                // Ok, we screamed there's a valid attribute enough to move to the end of the tag
+                if (ga)
+                {
+                    for (int i = nh; i < file.LineLength(); i++)
+                    {
+                        if (file.ByteAt(file.Line, i) == CHAR_ID_GREATERTHAN)
+                        {
+                            file.Head = i;
+                            break;
+                        }
+                    }
+                }
+                // All that work should result in some real screaming, errors!
+                else
+                {
+                    ParseErrorList.Push(new("StreamError").Init(StreamError.ERROR_ID_UNKNOWN_XML_ATTRIBUTE,
+                        file.LumpNumber,
+                        file.LumpHash,
+                        "UNKNOWN XML ATTRIBUTE DETECTED!",
+                        at,
+                        file.Line,
+                        file.Stream[file.Line].TrueLine,
+                        file.Stream[file.Line].FullLine()));
+                    return false;                           
+                }      
+            }
+            // Purge the buffer
+            e = "";
+        }
+        // So guess what, reset the file
+        file.Reset();
+        // Holy crap we got here?  Return true before something else makes it return false!
         return true;
     }
 
-    private bool Tokenize(in out FileStream file, in out array<DefToken> parseList)
+    /*
+        Tokenizing and Parsing are going to be the hardest
+        50 feet to run aren't they?
+
+        Ok, xml describes a tree structure.
+        Going up, everything is a child.
+        Going down, everything is root, aka a parent.
+        It looks backwards in the file, further into the
+        structure is further up the tree.
+    */
+    private bool Tokenize(in out FileStream file, in array<ZMLTag> TagList, in out array<XMLToken> parseList)
     {
+        console.printf("\cf\t - XML Tokenizing...");
+        string e = "";
+        while (file.StreamIndex() < file.StreamLength())
+        {
+            e.AppendFormat("%s", file.PeekTo());
+            if (e.ByteAt(0) == CHAR_ID_LESSTHAN && file.PeekB() != CHAR_ID_BACKSLASH)
+            {
+                string st = "";
+                bool vt = false;
+                int td = -1;
+                // Read the line from where Head is
+                for (int i = file.Head; i < file.LineLength(); i++)
+                {
+                    st.AppendFormat("%s", file.CharAt(file.Line, i));
+                    // Check if the temp buffer contains a tag name
+                    for (int j = 0; j < TagList.Size(); j++)
+                    {
+                        // It does, store the index and get out of the loops
+                        if (st == TagList[j].Name)
+                        {
+                            vt = true;
+                            td = j;
+                            break;
+                        }
+                    }
+
+                    if (vt)
+                        break;
+                }
+
+                // Have a valid tag
+                if (vt)
+                {
+                    switch(TagList[td].Type)
+                    {
+                        case ZMLTag.t_none:
+                            /* This is a root node, it contains other nodes in its children tree,
+                                we need to store: 
+                                that it is a root node,
+                                what it is named - or the tag index,
+                                the file name*/
+                            break;
+                        default:
+                            /* Everything else are children nodes*/
+                            break;
+                    }
+                }            
+            }
+            e = "";
+        }
         return true;
     }
 
-    private void Parse(in out FileStream file, in out array<DefToken> parseList, in out ZMLSeed Seed)
+    private void Parse(in out FileStream file, in out array<XMLToken> parseList, in out ZMLSeed Seed)
     {}
 
     /* - END OF METHODS - */    

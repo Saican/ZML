@@ -22,6 +22,9 @@ class StreamError
         ERROR_ID_EMPTYFILE,
         ERROR_ID_MISSINGLESSTHAN,
         ERROR_ID_MISSINGGREATERTHAN,
+        ERROR_ID_UNCLOSEDTAG,
+        ERROR_ID_UNKNOWN_XML_IDENTIFIER,
+        ERROR_ID_UNKNOWN_XML_ATTRIBUTE,
     };
 
     ERRID CodeId;
@@ -82,20 +85,26 @@ class StreamError
     {
         switch (t)
         {
-            case ERROR_ID_OPENCOMMENT:          return "Cuban Bullfinch : OPEN_COMMENT";
-            case ERROR_ID_INVALIDCHAR:          return "Brewer's Blackbird : INVALID_CHAR";
-            case ERROR_ID_OPENSTRING:           return "Lark Bunting : OPEN_STRING";
-            case ERROR_ID_UNEXPECTEDCODE:       return "Hooded Crow : UNEXPECTED_CODE";
-            case ERROR_ID_MISSINGCOMMA:         return "Common Grackle : MISSING_COMMA";
-            case ERROR_ID_MISSINGEOB:           return "Great Cormorant : MISSING_EOB";
-            case ERROR_ID_MISSINGOPENBRACE:     return "Crested Myna : MISSING_OPEN_BRACE";
-            case ERROR_ID_MISSINGCLOSEBRACE:    return "Black Pheobe : MISSING_CLOSE_BRACE";
-            case ERROR_ID_UNKNOWNIDENTIFIER:    return "Bronzed Cowbird : UNKNOWN_IDENTIFIER";
-            case ERROR_ID_EMPTYFILE:            return "Eurasian Blackbird : EMPTY_FILE";
-            case ERROR_ID_MISSINGLESSTHAN:      return "Fischer's Lovebird : MISSING_LESS_THAN";
-            case ERROR_ID_MISSINGGREATERTHAN:   return "Rosella Parakeet : MISSING_GREATER_THAN";
+            // ZMLDEFS/General
+            case ERROR_ID_OPENCOMMENT:              return "Cuban Bullfinch : OPEN_COMMENT";
+            case ERROR_ID_INVALIDCHAR:              return "Brewer's Blackbird : INVALID_CHAR";
+            case ERROR_ID_OPENSTRING:               return "Lark Bunting : OPEN_STRING";
+            case ERROR_ID_UNEXPECTEDCODE:           return "Hooded Crow : UNEXPECTED_CODE";
+            case ERROR_ID_MISSINGCOMMA:             return "Common Grackle : MISSING_COMMA";
+            case ERROR_ID_MISSINGEOB:               return "Great Cormorant : MISSING_EOB";
+            case ERROR_ID_MISSINGOPENBRACE:         return "Crested Myna : MISSING_OPEN_BRACE";
+            case ERROR_ID_MISSINGCLOSEBRACE:        return "Black Pheobe : MISSING_CLOSE_BRACE";
+            case ERROR_ID_UNKNOWNIDENTIFIER:        return "Bronzed Cowbird : UNKNOWN_IDENTIFIER";
+            case ERROR_ID_EMPTYFILE:                return "Eurasian Blackbird : EMPTY_FILE";
+            // XML Specific
+            case ERROR_ID_MISSINGLESSTHAN:          return "Fischer's Lovebird : MISSING_LESS_THAN";
+            case ERROR_ID_MISSINGGREATERTHAN:       return "Rosella Parakeet : MISSING_GREATER_THAN";
+            case ERROR_ID_UNCLOSEDTAG:              return "Jenday Conure : UNCLOSED_TAG";
+            case ERROR_ID_UNKNOWN_XML_IDENTIFIER:   return "Citron Cockatoo : UNKNOWN_XML_IDENTIFIER";
+            case ERROR_ID_UNKNOWN_XML_ATTRIBUTE:    return "Hyacinth Macaw : UNKNOWN_XML_ATTRIBUTE";
+
             default:
-            case ERROR_ID_IDKWHAT: return "Murder_of_Crows_IDKWHAT";
+            case ERROR_ID_IDKWHAT:                  return "Murder_of_Crows_IDKWHAT";
         }
     }
 

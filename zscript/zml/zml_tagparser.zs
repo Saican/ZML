@@ -678,8 +678,8 @@ class ZMLTagParser
             }
         }
 
+        file.Reset();
         TokenListOut(file, parseList);
-
         return true;
     }
 
@@ -699,7 +699,7 @@ class ZMLTagParser
         Turns the token list into xml tags
         The "getting here" tho
     */
-    private void Parse(in out FileStream file, in out array<DefToken> parseList)
+    private void Parse(in FileStream file, in array<DefToken> parseList)
     {
         // Check that the list has something in it
         if (parseList.Size() > 0)
