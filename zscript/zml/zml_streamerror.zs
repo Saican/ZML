@@ -20,11 +20,14 @@ class StreamError
         ERROR_ID_MISSINGCLOSEBRACE,
         ERROR_ID_UNKNOWNIDENTIFIER,
         ERROR_ID_EMPTYFILE,
+        ERROR_ID_INVALIDTYPE,
+
         ERROR_ID_MISSINGLESSTHAN,
         ERROR_ID_MISSINGGREATERTHAN,
         ERROR_ID_UNCLOSEDTAG,
         ERROR_ID_UNKNOWN_XML_IDENTIFIER,
         ERROR_ID_UNKNOWN_XML_ATTRIBUTE,
+        ERROR_ID_NODE_DISORDER,
     };
 
     ERRID CodeId;
@@ -96,12 +99,14 @@ class StreamError
             case ERROR_ID_MISSINGCLOSEBRACE:        return "Black Pheobe : MISSING_CLOSE_BRACE";
             case ERROR_ID_UNKNOWNIDENTIFIER:        return "Bronzed Cowbird : UNKNOWN_IDENTIFIER";
             case ERROR_ID_EMPTYFILE:                return "Eurasian Blackbird : EMPTY_FILE";
+            case ERROR_ID_INVALIDTYPE:              return "Eastern Kingbird : INVALID_TYPE";
             // XML Specific
             case ERROR_ID_MISSINGLESSTHAN:          return "Fischer's Lovebird : MISSING_LESS_THAN";
             case ERROR_ID_MISSINGGREATERTHAN:       return "Rosella Parakeet : MISSING_GREATER_THAN";
             case ERROR_ID_UNCLOSEDTAG:              return "Jenday Conure : UNCLOSED_TAG";
             case ERROR_ID_UNKNOWN_XML_IDENTIFIER:   return "Citron Cockatoo : UNKNOWN_XML_IDENTIFIER";
             case ERROR_ID_UNKNOWN_XML_ATTRIBUTE:    return "Hyacinth Macaw : UNKNOWN_XML_ATTRIBUTE";
+            case ERROR_ID_NODE_DISORDER:            return "Dusky Pionus : NODE_DISORDER";
 
             default:
             case ERROR_ID_IDKWHAT:                  return "Murder_of_Crows_IDKWHAT";

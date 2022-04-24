@@ -52,7 +52,7 @@ class StreamLine
     {
         string s = "";
         if (at >= 0 && len > 0 &&
-            at < Length() && at + len < Length())
+            at < Length() && at + len <= Length())
         {
             for (int i = 0; i < len; i++)
                 s.AppendFormat("%s", Chars[i + at]);
@@ -238,8 +238,7 @@ class FileStream
             }
         }
 
-        self.StreamOut();
-
+        //self.StreamOut();
         return self;
     }
 
@@ -281,7 +280,7 @@ class FileStream
         for (int i = 0; i < len; i++)
             s.AppendFormat("%s", Stream[Line].Chars[i + Head]);
 
-        console.printf(string.Format("\chPeekTo\cc, Line: %d, Head: %d, len: %d, Line Length: %d, Peek Contents: %s", Line, Head, len, Stream[Line].Length(), s));
+        //console.printf(string.Format("\chPeekTo\cc, Line: %d, Head: %d, len: %d, Line Length: %d, Peek Contents: %s", Line, Head, len, Stream[Line].Length(), s));
 
         Head += len;
         return s;
@@ -318,7 +317,7 @@ class FileStream
         {
             for (int j = r; j < Stream[i].Length(); j++)
             {
-                console.printf(string.format("Looking for character: %s -- Examining character, line %d, head %d, %s", c, i, j, CharAt(i, j)));
+                //console.printf(string.format("Looking for character: %s -- Examining character, line %d, head %d, %s", c, i, j, CharAt(i, j)));
                 if ((CharAt(i, j).ByteAt(0) == c.ByteAt(0)) &&      // Does the first character match?
                     (c.Length() > 1 ?                               // Do we need to look for more characters?
                         mul_charCheck(c, i, j) :                    // Yes, get the result of Multi-Char Check
@@ -327,19 +326,19 @@ class FileStream
                     // Is there more after?
                     if (j + c.Length() < Stream[i].Length())
                     {
-                        console.printf(string.format("\chPeekEnd\cc - There's more after the terminator, head at : %d, moving to %d, line %d", Head, j + c.Length(), i));
+                        //console.printf(string.format("\chPeekEnd\cc - There's more after the terminator, head at : %d, moving to %d, line %d", Head, j + c.Length(), i));
                         Head = j + c.Length();
                         return i;
                     }
                     // No, go to the next line.
                     else
                     {
-                        console.printf("\chPeekEnd\cc - Go to the next line");
+                        //console.printf("\chPeekEnd\cc - Go to the next line");
                         Head = 0;
                         return i + 1;
                     }
                 }
-                else if (c.Length() == 1 && IsCodeChar(Stream[i].Chars[j].ByteAt(0), cs))
+                else if (c.Length() == 1 && !IsAlphaNum(Stream[i].Chars[j].ByteAt(0)) && !IsCodeChar(Stream[i].Chars[j].ByteAt(0), cs))
                     return -1;
             }
             r = 0;

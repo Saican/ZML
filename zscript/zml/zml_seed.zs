@@ -23,17 +23,31 @@ class ZMLSeed : actor
         radius 1;
     }
 
-    ZMLNode XmlTree;
-    bool Accessible;
+    ZXMLParser ZML;
 
     override void PostBeginPlay()
     {
-        self.Accessible = false;
+        ZML = new("ZXMLParser").Init(new("ZMLTagParser").Init().TagList);
         super.PostBeginPlay();
     }
 
-    clearscope void FindElements(string namespace, out array<ZMLNode> nodes)
-    {}
+    /*
+        ZML API Wrappers for accessing the tree
+    */
+    clearscope void FindElements_InFile(string FileName, string Name, in out array<ZMLNode> Elements)
+    {
+        ZML.FindElements_InFile(FileName, Name, ZML.XMLTree, Elements);
+    }
+
+    clearscope void FindElements(string Name, in out array<ZMLNode> Elements)
+    {
+        ZML.FindElements(Name, ZML.XMLTree, Elements);
+    }
+
+    clearscope ZMLNode FindFile(string FileName)
+    {
+        return ZML.FindFile(FileName, ZML.XMLTree);
+    }
 
     states
     {

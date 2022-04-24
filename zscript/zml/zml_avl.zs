@@ -10,20 +10,60 @@
 
 */
 
+
 class ZMLNode
 {
-    ZMLNode Root,       // Children tree
-        Left, Right;    // Sibling trees
-    int Height,
-        Weight;
+    ZMLNode Children,
+        LeftSibling,
+        RightSibling;
 
-    string Name,
-        Data;
+    int Height,             // AVL balance value
+        Weight;             // This gives the tree something to compare against
+
+    string FileName,        // Name of the file the node came from - this may repeat  
+        Name,               // Tag name - may also repeat
+        Data;               // No generic types in ZScript, so API functions will do casting,
+                            // or users may do so themselves.  ToBool is unique to the API though.
+
+    clearscope void NodeOut()
+    {
+        console.printf(string.format("ZMLNode, Name: %s, from file: %s, contains data: %s\n\tnode height: %d, node weight: %d\n\tnode has children: %s, root child name: %s\n\tnode has left sibling: %s, left sibling name: %s\n\tnode has right sibling: %s, right sibling name: %s\n\n",
+            Name, FileName, Data,
+            Height, Weight,
+            Children ? "yes" : "no",
+            Children ? Children.Name : "N/A",
+            LeftSibling ? "yes" : "no",
+            LeftSibling ? LeftSibling.Name : "N/A",
+            RightSibling ? "yes" : "no",
+            RightSibling ? RightSibling.Name : "N/A"));
+
+        if (Children)
+            Children.NodeOut();
+        if (LeftSibling)
+            LeftSibling.NodeOut();
+        if (RightSibling)
+            RightSibling.NodeOut();
+    }
+
+    clearscope void FindElements(string Name, in ZMLNode Root, in out array<ZMLNode> Elements)
+    {
+        if (Root.Name == Name)
+            Elements.Push(Root);
+
+        if (Root.Children)
+            Root.FindElements(Name, Root.Children, Elements);
+
+        if (Root.LeftSibling)
+            Root.FindElements(Name, Root.LeftSibling, Elements);
+        
+        if (Root.RightSibling)
+            Root.FindElements(Name, Root.RightSibling, Elements);
+    }
 
     ZMLNode GetChild(string n)
     { return null; }
 
-    int Hash(string d)
+    int Hash(string d, int r)
     {
         int a = 54059;
         int b = 76963;
@@ -32,44 +72,45 @@ class ZMLNode
         for (int i = 0; i < d.Length(); i++)
             h = (h * a) ^ (d.ByteAt(i) * b);
 
-        return h % c;
+        return h * r % c;
     }
 
     ZMLNode Init(string Name, string FileName, string Data) 
     { 
-        self.Root = self.Left = self.Right = null; 
+        self.Children = self.LeftSibling = self.RightSibling = null; 
         self.Height = 0;
         self.Name = Name;
+        self.FileName = FileName;
         self.Data = Data;
-        self.Weight = Hash(FileName);
+        self.Weight = Hash(string.Format("%s%s%s", FileName, Name, Data), Random());
         return self;
     }
 
     int calc_Height(ZMLNode p)
     {
-        if (p.Left && p.Right)
+        if (p.LeftSibling && p.RightSibling)
         {
-            if (p.Left.Height < p.Right.Height)
-                return p.Right.Height + 1;
+            if (p.LeftSibling.Height < p.RightSibling.Height)
+                return p.RightSibling.Height + 1;
             else
-                return p.Left.Height + 1;
+                return p.LeftSibling.Height + 1;
         }
-        else if (p.Left && !p.Right)
-            return p.Left.Height + 1;
-        else if (!p.Left && p.Right)
-            return p.Right.Height + 1;
+        else if (p.LeftSibling && !p.RightSibling)
+            return p.LeftSibling.Height + 1;
+        else if (!p.LeftSibling && p.RightSibling)
+            return p.RightSibling.Height + 1;
 
         return 0;
     }
 
     int getBalance(ZMLNode n)
     {
-        if (n.Left && n.Right)
-            return n.Left.Height - n.Right.Height; 
-        else if (n.Left && !n.Right)
-            return n.Left.Height; 
-        else if (!n.Left && n.Right )
-            return -n.Right.Height;
+        if (n.LeftSibling && n.RightSibling)
+            return n.LeftSibling.Height - n.RightSibling.Height; 
+        else if (n.LeftSibling && !n.RightSibling)
+            return n.LeftSibling.Height; 
+        else if (!n.LeftSibling && n.RightSibling )
+            return -n.RightSibling.Height;
 
         return 0;
     }
@@ -79,28 +120,26 @@ class ZMLNode
         ZMLNode p;
         ZMLNode tp;
         p = n;
-        tp = p.Left;
+        tp = p.LeftSibling;
 
-        p.Left = tp.Right;
-        tp.Right = p;
+        p.LeftSibling = tp.RightSibling;
+        tp.RightSibling = p;
 
         return tp; 
     }
-
 
     ZMLNode rrrotation(ZMLNode n)
     {
         ZMLNode p;
         ZMLNode tp;
         p = n;
-        tp = p.Right;
+        tp = p.RightSibling;
 
-        p.Right = tp.Left;
-        tp.Left = p;
+        p.RightSibling = tp.LeftSibling;
+        tp.LeftSibling = p;
 
         return tp; 
     }
-
 
     ZMLNode rlrotation(ZMLNode n)
     {
@@ -108,13 +147,13 @@ class ZMLNode
         ZMLNode tp;
         ZMLNode tp2;
         p = n;
-        tp = p.Right;
-        tp2 = p.Right.Left;
+        tp = p.RightSibling;
+        tp2 = p.RightSibling.LeftSibling;
 
-        p.Right = tp2.Left;
-        tp.Left = tp2.Right;
-        tp2.Left = p;
-        tp2.Right = tp; 
+        p.RightSibling = tp2.LeftSibling;
+        tp.LeftSibling = tp2.RightSibling;
+        tp2.LeftSibling = p;
+        tp2.RightSibling = tp; 
         
         return tp2; 
     }
@@ -125,13 +164,13 @@ class ZMLNode
         ZMLNode tp;
         ZMLNode tp2;
         p = n;
-        tp = p.Left;
-        tp2 = p.Left.Right;
+        tp = p.LeftSibling;
+        tp2 = p.LeftSibling.RightSibling;
 
-        p.Left = tp2.Right;
-        tp.Right = tp2.Left;
-        tp2.Right = p;
-        tp2.Left = tp; 
+        p.LeftSibling = tp2.RightSibling;
+        tp.RightSibling = tp2.LeftSibling;
+        tp2.RightSibling = p;
+        tp2.LeftSibling = tp; 
         
         return tp2; 
     }
@@ -149,20 +188,20 @@ class ZMLNode
         else
         {
             if (Weight < r.Weight)
-                r.Left = insert(r.Left, Name, FileName, Data);
+                r.LeftSibling = insert(r.LeftSibling, Name, FileName, Data);
             else
-                r.Right = insert(r.Right, Name, FileName, Data);
+                r.RightSibling = insert(r.RightSibling, Name, FileName, Data);
         }
 
         r.Height = calc_Height(r);
 
-        if (getBalance(r) == 2 && getBalance(r.Left) == 1)
+        if (getBalance(r) == 2 && getBalance(r.LeftSibling) == 1)
             r = llrotation(r);
-        else if (getBalance(r) == -2 && getBalance(r.Right) == -1)
+        else if (getBalance(r) == -2 && getBalance(r.RightSibling) == -1)
             r = rrrotation(r);
-        else if (getBalance(r) == -2 && getBalance(r.Right) == 1)
+        else if (getBalance(r) == -2 && getBalance(r.RightSibling) == 1)
             r = rlrotation(r);
-        else if (getBalance(r) == 2 && getBalance(r.Left) == -1)
+        else if (getBalance(r) == 2 && getBalance(r.LeftSibling) == -1)
             r = lrrotation(r);
 
         return r;
@@ -170,52 +209,52 @@ class ZMLNode
  
     ZMLNode deleteNode(ZMLNode p, int Weight)
     {
-        if (!p.Left && !p.Right)
+        if (!p.LeftSibling && !p.RightSibling)
         {
-            if (p == self.Root)
-                self.Root = null;
+            if (p == self.Children)
+                self.Children = null;
             return null;
         }
 
         ZMLNode t;
         ZMLNode q;
         if (p.Weight < Weight)
-            p.Right = deleteNode(p.Right, Weight);
+            p.RightSibling = deleteNode(p.RightSibling, Weight);
         else if (p.Weight > Weight)
-            p.Left = deleteNode(p.Left, Weight);
+            p.LeftSibling = deleteNode(p.LeftSibling, Weight);
         else
         {
-            if (p.Left)
+            if (p.LeftSibling)
             {
-                q = inpre(p.Left);
+                q = inpre(p.LeftSibling);
                 p.Name = q.Name;
                 p.Data = q.Data;
-                p.Root = q.Root;
+                p.Children = q.Children;
                 p.Weight = q.Weight;
-                p.Left = deleteNode(p.Left, q.Weight);
+                p.LeftSibling = deleteNode(p.LeftSibling, q.Weight);
             }
             else
             {
-                q = insuc(p.Right);
+                q = insuc(p.RightSibling);
                 p.Name = q.Name;
                 p.Data = q.Data;
-                p.Root = q.Root;
+                p.Children = q.Children;
                 p.Weight = q.Weight;
-                p.Right = deleteNode(p.Right, q.Weight);
+                p.RightSibling = deleteNode(p.RightSibling, q.Weight);
             }
         }
 
-        if (getBalance(p) == 2 && getBalance(p.Left) == 1)
+        if (getBalance(p) == 2 && getBalance(p.LeftSibling) == 1)
             p = llrotation(p);
-        else if (getBalance(p) == 2 && getBalance(p.Left) == -1)
+        else if (getBalance(p) == 2 && getBalance(p.LeftSibling) == -1)
             p = lrrotation(p);
-        else if (getBalance(p) == 2 && getBalance(p.Left) == 0)
+        else if (getBalance(p) == 2 && getBalance(p.LeftSibling) == 0)
             p = llrotation(p);
-        else if (getBalance(p) == -2 && getBalance(p.Right) == -1)
+        else if (getBalance(p) == -2 && getBalance(p.RightSibling) == -1)
             p = rrrotation(p);
-        else if (getBalance(p) == -2 && getBalance(p.Right) == 1)
+        else if (getBalance(p) == -2 && getBalance(p.RightSibling) == 1)
             p = rlrotation(p);
-        else if (getBalance(p) == -2 && getBalance(p.Right) == 0)
+        else if (getBalance(p) == -2 && getBalance(p.RightSibling) == 0)
             p = llrotation(p);
 
         return p;
@@ -223,18 +262,19 @@ class ZMLNode
     
     ZMLNode inpre(ZMLNode p)
     {
-        while (p.Right)
-            p = p.Right;
+        while (p.RightSibling)
+            p = p.RightSibling;
 
         return p;    
     }
 
     ZMLNode insuc(ZMLNode p)
     {
-        while(p.Left)
-            p = p.Left;
+        while(p.LeftSibling)
+            p = p.LeftSibling;
 
         return p;    
     }
-}
 
+    /* - END OF METHODS - */
+}

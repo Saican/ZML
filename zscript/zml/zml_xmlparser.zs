@@ -45,14 +45,53 @@ class ZXMLParser
     array<FileStream> TranslationStreams;
     array<FileStream> DefinitionStreams;
 
+    array<string> DefinitionNames;
+
     int TranslationParseErrorCount,
         DefinitionParseErrorCount;
-    array<StreamError> ParseErrorList;
+    array<StreamError> TranslationParseErrorList;
+    array<StreamError> DefinitionParseErrorList;
 
-    ZXMLParser Init(in out actor a_Seed, in array<ZMLTag> TagList)
+    ZMLNode XMLTree;
+
+    /*
+        Returns - through references - a collection of elements from the given file
+    */
+    clearscope void FindElements_InFile(string FileName, string Name, in ZMLNode Root, in out array<ZMLNode> Elements)
     {
+        ZMLNode n = FindFile(FileName, Root);
+        if (n)
+            n.FindElements(Name, n.Children, Elements);
+    }
+
+    clearscope void FindElements(string Name, in ZMLNode Root, in out array<ZMLNode> Elements) 
+    { 
+        if (XmlTree) 
+            XmlTree.FindElements(Name, Root, Elements); 
+    }
+
+    /*
+        Returns the entire DOM of the given file name.
+        Function is recursive, you must supply the root node of the tree.
+    */
+    clearscope ZMLNode FindFile(string FileName, in ZMLNode Root)
+    {
+        if (Root.FileName == FileName)
+            return Root;
+        else if (Root.LeftSibling)
+            return FindFile(FileName, Root.LeftSibling);
+        else if (Root.RightSibling)
+            return FindFile(FileName, Root.RightSibling);
+        else
+            return null;
+    }
+
+    ZXMLParser Init(in array<ZMLTag> TagList)
+    {
+        // This could have been done a bit cleaner, but 
+        // character sets establish the language syntax.
         makeCharset();
-        ZMLSeed Seed = ZMLSeed(a_Seed);
+
         // XML Parsing basically happens twice.
         // The translation files themselves are xml, 
         // thus the whole thing needs ran on those 
@@ -62,27 +101,56 @@ class ZXMLParser
         for (int i = 0; i < transStreamSize; i++)
         {
             array<XMLToken> parseList;
-            if (Sanitize_StreamComments(TranslationStreams[i]) ?
-                (Check_StreamContinuity(TranslationStreams[i], TagList) ? 
-                    Tokenize(TranslationStreams[i], TagList, parseList) :
-                    false) :
+            if (Sanitize_StreamComments(TranslationStreams[i], TranslationParseErrorList) ?
+                Check_StreamContinuity(TranslationStreams[i], TagList, TranslationParseErrorList) :
                 false)
-                Parse(TranslationStreams[i], parseList, Seed);
+            {
+                Tokenize(TranslationStreams[i], TagList, parseList);
+                Parse(TranslationStreams[i], "zml", TagList, parseList, XMLTree, TranslationParseErrorList, TranslationParseErrorCount);
+            }
+            else
+                TranslationParseErrorCount++;
         }
 
-        int defStreamSize = Generate_DefinitionStreams(Seed);
+        DefinitionParseErrorCount = 0;
+        int defStreamSize = Generate_DefinitionStreams();
         for (int i = 0; i < defStreamSize; i++)
         {
             array<XMLToken> parseList;
-            if (Sanitize_StreamComments(DefinitionStreams[i]) ?
-                (Check_StreamContinuity(DefinitionStreams[i], TagList) ? 
-                    Tokenize(DefinitionStreams[i], TagList, parseList) :
-                    false) :
+            if (Sanitize_StreamComments(DefinitionStreams[i], DefinitionParseErrorList) ?
+                Check_StreamContinuity(DefinitionStreams[i], TagList, DefinitionParseErrorList) :
                 false)
-                Parse(DefinitionStreams[i], parseList, Seed);
-        }   
+            {
+                Tokenize(DefinitionStreams[i], TagList, parseList);
+                Parse(DefinitionStreams[i], DefinitionNames[i], TagList, parseList, XMLTree, DefinitionParseErrorList, DefinitionParseErrorCount);
+            }
+            else
+                DefinitionParseErrorCount++;
+        }
+
+        // Translation Error output
+        if (TranslationParseErrorCount > 0)
+            ErrorOutput(TranslationParseErrorList, TranslationParseErrorCount, "translation");
+
+        // Definition Error output
+        if (DefinitionParseErrorCount > 0)
+            ErrorOutput(DefinitionParseErrorList, DefinitionParseErrorCount, "definition");
+
+        XMLTree.NodeOut();
 
         return self;
+    }
+
+    private void ErrorOutput(in array<StreamError> ParseErrorList, int ParseErrorCount, string lumpType)
+    {
+        console.printf(string.Format("\n\t\t\ciZML failed to parse \cg%d \ciXML %s lumps!\n\t\t\t\t\cc- This means ZML encountered a problem with the file%s and stopped trying to create usable data from %s. Reported errors need fixed.\n\n", ParseErrorCount, lumpType, (ParseErrorCount > 1 ? "s" : ""), (ParseErrorCount > 1 ? "them" : "it")));
+
+        for (int i = 0; i < ParseErrorList.Size(); i++)
+        {
+            StreamError error = ParseErrorList[i];
+            console.printf(string.Format("\t\t\cgZML ERROR! Code: \cx%s_(%d) \cg- Lump: #\ci%d\cg, Lump Hash: \ci%d\cg, Message: \ci%s\cg\n\t\t\t - Contents of Lexer: \ci%s \cg- Last known valid data started at line: #\cii:%d\cg(\cyf:%d\cg)!\n\t\t\t - Line contents: \cc%s\n\n",
+                error.CodeString, error.CodeId, error.LumpNumber, error.LumpHash, error.Message, error.StreamBufferContents, error.InternalLine, error.FileLine, error.FullLine));
+        }
     }
 
     // Checks the array to see if any streams have the same hash
@@ -115,24 +183,19 @@ class ZXMLParser
     /*
         Reads each definition
     */
-    private int Generate_DefinitionStreams(in ZMLSeed Seed)
+    private int Generate_DefinitionStreams()
     {
-        // Find all the nodes under the "zmltranslation" namespace
+        // Find all the <include> nodes
         array<ZMLNode> transList;
-        Seed.FindElements("zmltranslation", transList);
-        array<string> transPaths;
+        FindElements("include", XMLTree, transList);
         for (int i = 0; i < transList.Size(); i++)
         {
-            ZMLNode incl = transList[i].GetChild("include");
-            if (incl)
-                transPaths.Push(incl.Data);
-        }
-
-        for (int i = 0; i < transPaths.Size(); i++)
-        {
-            int l = Wads.CheckNumForFullName(transPaths[i]);
+            int l = Wads.CheckNumForFullName(transList[i].Data);
             if (l > -1)
+            {
+                DefinitionNames.Push(GetFileName(transList[i].Data));
                 ReadLump(l, DefinitionStreams);
+            }
         }
         console.printf(string.Format("\t\t\cdZML successfully read \cy%d \cdXML files into file streams!\n\t\t\t\t\cc- This means the files are in a parse-able format, it does not mean they are valid.\n\n", DefinitionStreams.Size()));
         return DefinitionStreams.Size();
@@ -155,7 +218,25 @@ class ZXMLParser
             console.printf(string.Format("\t\t\ciZML Warning! \ccNo big deal, but tried to read the same lump twice! Original lump # \ci%d\cc, duplicate lump # \ci%d", Stream[ds].LumpNumber, l));
     }
 
-    private bool Sanitize_StreamComments(in out FileStream file)
+    /*
+        Creates the filename
+    */
+    private string GetFileName(string p)
+    {
+        array<string> ps;
+        p.Split(ps, "/");
+        if (ps.Size() > 0)
+        {
+            array<string> fn;
+            ps[ps.Size() - 1].Split(fn, ".");
+            if (fn.Size() == 2)
+                return fn[0];
+        }
+
+        return "";
+    }
+
+    private bool Sanitize_StreamComments(in out FileStream file, in out array<StreamError> ParseErrorList)
     {
         string e = "";
         while (file.StreamIndex() < file.StreamLength())
@@ -216,7 +297,7 @@ class ZXMLParser
         return true;
     }  
 
-    private bool Check_StreamContinuity(in out FileStream file, in array<ZMLTag> TagList)
+    private bool Check_StreamContinuity(in out FileStream file, in array<ZMLTag> TagList, in out array<StreamError> ParseErrorList)
     {
         // A few syntax chars can be reliably 
         // checked for by just counting them,
@@ -343,15 +424,40 @@ class ZXMLParser
                 // Read the line from where Head is
                 for (int i = file.Head; i < file.LineLength(); i++)
                 {
-                    st.AppendFormat("%s", file.CharAt(file.Line, i));
-                    // Check if the temp buffer contains a tag name
-                    for (int j = 0; j < TagList.Size(); j++)
+                    if (file.ByteAt(file.Line, i) != CHAR_ID_GREATERTHAN)
+                        st.AppendFormat("%s", file.CharAt(file.Line, i));
+                    else
                     {
-                        // It does, format the closing tag
-                        if (st == TagList[j].Name)
+                        // Check if the temp buffer contains a tag name
+                        for (int j = 0; j < TagList.Size(); j++)
                         {
-                            ct = string.Format("</%s>", TagList[j].Name);
-                            break;
+                            // It does, format the closing tag
+                            if (st == TagList[j].Name)
+                            {
+                                ct = string.Format("</%s>", TagList[j].Name);
+                                break;
+                            }
+                        }
+
+                        // It does not, likely the string contains the tag and attributes, time to slice and dice.
+                        if (ct ~== "")
+                        {
+                            string as = "";
+                            for (int j = 0; j < st.Length(); j++)
+                            {
+                                as.AppendFormat("%s", st.Mid(j, 1));
+                                for (int k = 0; k < TagList.Size(); k++)
+                                {
+                                    if (as == TagList[k].Name && (TagList[k].Attributes.Size() == 0 ? as.Length() == TagList[k].Name.Length() : true))
+                                    {
+                                        ct = string.Format("</%s>", TagList[k].Name);
+                                        break;
+                                    }
+                                }
+
+                                if (ct != "")
+                                    break;
+                            }
                         }
                     }
 
@@ -438,7 +544,7 @@ class ZXMLParser
                     for (int j = 0; j < TagList.Size(); j++)
                     {
                         // It is and it has attributes - yay...
-                        if (st == TagList[j].Name && TagList[j].Attributes.Size() > 0)
+                        if (st == TagList[j].Name && TagList[j].Attributes.Size() > 0 && file.ByteAt(file.Line, i + 1) != CHAR_ID_GREATERTHAN)
                         {
                             at = "";
                             // Read through the line again - luckily we just keep picking up where we left off
@@ -525,63 +631,307 @@ class ZXMLParser
         It looks backwards in the file, further into the
         structure is further up the tree.
     */
-    private bool Tokenize(in out FileStream file, in array<ZMLTag> TagList, in out array<XMLToken> parseList)
+    private void Tokenize(in out FileStream file, in array<ZMLTag> TagList, in out array<XMLToken> parseList)
     {
         console.printf("\cf\t - XML Tokenizing...");
         string e = "";
         while (file.StreamIndex() < file.StreamLength())
         {
             e.AppendFormat("%s", file.PeekTo());
+            // Opening of tag
             if (e.ByteAt(0) == CHAR_ID_LESSTHAN && file.PeekB() != CHAR_ID_BACKSLASH)
             {
+                // Create internal string buffer
                 string st = "";
-                bool vt = false;
-                int td = -1;
+
+                int td = -1,            // This will be the index of the tag in the list
+                    tl = file.Line,     // Record the line the tag was on
+                    ts = file.Head,     // The start of the tag is wherever head is now
+                    te = 0;             // The end can be 0 until we find it
                 // Read the line from where Head is
                 for (int i = file.Head; i < file.LineLength(); i++)
                 {
-                    st.AppendFormat("%s", file.CharAt(file.Line, i));
-                    // Check if the temp buffer contains a tag name
-                    for (int j = 0; j < TagList.Size(); j++)
+                    // Append chars to the temp buffer and then search the tag list each time to see if we have a tag
+                    if (file.ByteAt(file.Line, i) != CHAR_ID_GREATERTHAN)
+                        st.AppendFormat("%s", file.CharAt(file.Line, i));
+                    else
                     {
-                        // It does, store the index and get out of the loops
-                        if (st == TagList[j].Name)
+                        // Check if the temp buffer contains a tag name
+                        for (int j = 0; j < TagList.Size(); j++)
                         {
-                            vt = true;
-                            td = j;
-                            break;
+                            // It does
+                            if (st == TagList[j].Name)
+                            {
+                                td = j;         // store the index
+                                te = i - 1;     // i should still be on the last character of the tag name
+                                break;
+                            }
+                        }
+
+                        // No it doesn't - that's probably because of attributes
+                        if (td == -1)
+                        {
+                            string as = "";
+                            for (int j = 0; j < st.Length(); j++)
+                            {
+                                as.AppendFormat("%s", st.Mid(j, 1));
+                                for (int k = 0; k < TagList.Size(); k++)
+                                {
+                                    if (as == TagList[k].Name && (TagList[k].Attributes.Size() == 0 ? as.Length() == TagList[k].Name.Length() : true))
+                                    {
+                                        td = k;
+                                        te = ts + as.Length() - 1;
+                                        break;
+                                    }
+                                }
+
+                                if (td > -1)
+                                    break;
+                            }
                         }
                     }
 
-                    if (vt)
+                    // Have a valid tag so goodbye this loop
+                    if (td > -1)
                         break;
                 }
 
-                // Have a valid tag
-                if (vt)
+                // SHOULD have a valid tag, but just in case check anyway
+                if (td > -1)
                 {
                     switch(TagList[td].Type)
                     {
+                        // Roots contain other nodes - they will be terminated after child nodes
                         case ZMLTag.t_none:
-                            /* This is a root node, it contains other nodes in its children tree,
-                                we need to store: 
-                                that it is a root node,
-                                what it is named - or the tag index,
-                                the file name*/
+                            // All we need to push is that it's a root token, and standard token info
+                            parseList.Push(new("XMLToken").Init(XMLToken.WORD_ROOT, 
+                                tl, ts, te - ts + 1));
                             break;
+                        // Everything is a child and contains data - proceed with the stream witchcraft
                         default:
-                            /* Everything else are children nodes*/
+                            // Should not get t_unknown - that is checked for in the def parser
+                            // So move things along to the end of the tag to begin picking up the data
+                            int tse = file.PeekEnd(">", XMLCharSet),
+                                dl = -1,    // Data line
+                                ds = -1,    // Data start
+                                de = 0;     // Data end
+                            // Oh my, PeekEnd you dirty thing, you return -1 if you fail
+                            if (tse > -1)
+                            {
+                                dl = tse;
+                                ds = file.Head;
+                            }
+
+                            // Right, got the data, get the terminator
+                            string ct = string.Format("</%s>", TagList[td].Name);
+                            // Yep, PeekEnd again, that function is just so darn handy
+                            int tee = file.PeekEnd(ct, XMLCharSet);
+                            // SHOULD not return -1, but check anyway
+                            if (tee > -1)
+                            {
+                                // This means the terminator is on its own line
+                                if (tee - 1 != dl)
+                                    de = file.Stream[dl].Length() - 1;
+                                // It's on the same line as everything else
+                                else
+                                    de = file.Stream[dl].Length() - TagList[td].Name.Length() - 4; // there are three chars in the terminator tag, plus one for the index
+
+                                // We need to pick up the next node or whatever
+                                file.Line = tee;
+                            }
+
+                            // Got everything for the node token
+                            parseList.Push(new("XMLToken").Init(XMLToken.WORD_NODE,
+                                tl, ts, te - ts + 1,
+                                dl, ds, de - ds + 1));
+
+                            // Ok, manually terminate the tag
+                            int xl = -1,    // Terminator line
+                                xs = -1,    // Terminator start
+                                xe = 0;     // Terminator end - seeing a pattern yet?
+                            // Do the same check when figuring out where the data ends
+                            // This means the terminator is on its own line - perfectly valid XML
+                            if (tee - 1 != dl)
+                            {
+                                xl = tee - 1;
+                                xs = 2;
+                                xe = file.Stream[xl].Length() - 2;
+                            }
+                            // It's on the same line as everything else
+                            else
+                            {
+                                xl = dl;
+                                xs = file.Stream[xl].Length() - TagList[td].Name.Length() - 1;
+                                xe = file.Stream[xl].Length() - 2;
+                            }
+                            // That's it - a terminator stores in the tag members
+                            parseList.Push(new("XMLToken").Init(XMLToken.WORD_TERMINATE,
+                                xl, xs, xe - xs + 1));
                             break;
                     }
-                }            
+                }
             }
+            // All other terminators should be root terminators.
+            else if (e.ByteAt(0) == CHAR_ID_LESSTHAN && file.PeekB() == CHAR_ID_BACKSLASH)
+                parseList.Push(new("XMLToken").Init(XMLToken.WORD_TERMINATE, 
+                    file.Line, 2, file.Stream[file.Line].Length() - 3));
+
+            // Oh hey, it's a buffer needing purged
             e = "";
         }
-        return true;
+
+        // Not really needed at this point but just good manners
+        file.Reset();
+        // If in doubt uncomment this
+        TokenListOut(file, parseList);
     }
 
-    private void Parse(in out FileStream file, in out array<XMLToken> parseList, in out ZMLSeed Seed)
-    {}
+    /*
+        Outputs the contents of the Token List for debugging purposes
+    */
+    private void TokenListOut(in FileStream file, in array<XmlToken> tokens)
+    {
+        console.printf(string.Format("Token List contains %d XML tokens.  Contents:", tokens.Size()));
+        for (int i = 0; i < tokens.Size(); i++)
+        {
+            console.printf(string.format("Token #%d, word is: #:%d(s:%s), found on line: i:%d(f:%d), tag starts at: %d, tag length of: %d, resultant tag: %s,\n\tcontains data, found on line: i:%d(f:%d), data starts at: %d, data length of: %d, resultant data: %s", 
+                i, 
+                tokens[i].t, 
+                XMLToken.TokenToString(tokens[i].t), 
+                tokens[i].tagLine, 
+                file.Stream[tokens[i].tagLine].TrueLine, 
+                tokens[i].tagStart, 
+                tokens[i].tagLength,
+                tokens[i].tagLength > 0 ? file.Stream[tokens[i].tagLine].Mid(tokens[i].tagStart, tokens[i].tagLength) : "empty",
+                tokens[i].dataLine,
+                file.Stream[tokens[i].dataLine].TrueLine,
+                tokens[i].dataStart,
+                tokens[i].dataLength,
+                tokens[i].dataLength > 0 ? file.Stream[tokens[i].dataLine].Mid(tokens[i].dataStart, tokens[i].dataLength) : "empty"));
+        }
+    }
+
+    /*
+        Take everything that came before it.
+        Turn it into the XML tree.
+        Finally.
+    */
+    private void Parse(in out FileStream file, string fileName, 
+        in array<ZMLTag> TagList, 
+        in out array<XMLToken> parseList, 
+        in out ZMLNode Root, 
+        in out array<StreamError> ParseErrorList, 
+        in out int ParseErrorCount)
+    {
+        if (parseList.Size() > 0)
+        {
+            console.printf("Yay tokens and a seed, lets grow a tree!");
+
+            ZMLNode r = null;
+            for (int i = 0; i < parseList.Size(); i++)
+            {
+                switch(parseList[i].t)
+                {
+                    // Create a node that contains other nodes
+                    case XMLToken.WORD_ROOT:
+                        // We do not have an internal root node
+                        if (!r)
+                        {
+                            // We do have a root, we can insert on it
+                            if (Root)
+                            {
+                                console.printf("Inserting on root");
+                                r = Root.Insert(Root,
+                                        file.Stream[parseList[i].tagLine].Mid(parseList[i].tagStart, parseList[i].tagLength),
+                                        fileName,
+                                        "");
+                            }
+                            // No root either, so make a root
+                            else
+                            {
+                                console.printf("Making new root");
+                                r = Root = new("ZMLNode").Init(file.Stream[parseList[i].tagLine].Mid(parseList[i].tagStart, parseList[i].tagLength),
+                                        fileName,
+                                        "");
+                            }
+                        }
+                        // We do have a root, so this needs to be a child node, check if we have children and insert on that tree
+                        else if (r.Children)
+                            r = r.Children.Insert(r.Children,
+                                    file.Stream[parseList[i].tagLine].Mid(parseList[i].tagStart, parseList[i].tagLength),
+                                    fileName,
+                                    "");
+                        // Nope, first child
+                        else
+                            r = r.Children = new("ZMLNode").Init(file.Stream[parseList[i].tagLine].Mid(parseList[i].tagStart, parseList[i].tagLength),
+                                    fileName,
+                                    "");
+                        break;
+                    // Create a node that will contain data
+                    case XMLToken.WORD_NODE:
+                        // The last and most problematic error - nodes outside of roots - I may fix for this to save processing
+                        // But I can already forsee it being its own clusterfuck continuity check addon.
+                        //
+                        // So we do have an interal root
+                        if (r)
+                        {
+                            // And that internal root has children, so insert into that tree
+                            if(r.Children)
+                                r.Children.Insert(r.Children, 
+                                    file.Stream[parseList[i].tagLine].Mid(parseList[i].tagStart, parseList[i].tagLength),
+                                    fileName,
+                                    file.Stream[parseList[i].dataLine].Mid(parseList[i].dataStart, parseList[i].dataLength));
+                            // First child on that tree
+                            else
+                                r.Children = new("ZMLNode").Init(file.Stream[parseList[i].tagLine].Mid(parseList[i].tagStart, parseList[i].tagLength),
+                                    fileName,
+                                    file.Stream[parseList[i].dataLine].Mid(parseList[i].dataStart, parseList[i].dataLength));
+                        }
+                        // Rar - luckily this is handled fairly gracefully, DeleteNode can be called on the tree itself
+                        // to just get rid of this entire thing.  Additional continuity checking would save the time getting here.
+                        else
+                        {
+                            XMLTree.DeleteNode(FindFile(fileName, XMLTree), FindFile(fileName, XMLTree).Weight);
+                            ParseErrorList.Push(new("StreamError").Init(StreamError.ERROR_ID_NODE_DISORDER,
+                                file.LumpNumber,
+                                file.LumpHash,
+                                "CHILD NODE FOUND OUTSIDE ROOT! TREE WITH BROKEN LIMB! AMPUTATE!",
+                                "N/A",
+                                -1,
+                                -1,
+                                "N/A"));
+                            ParseErrorCount++;                         
+                            return;
+                        }
+                        break;
+                    // Ok if it's a root terminator, we need to find it's parent and make that be r.
+                    case XMLToken.WORD_TERMINATE:
+                        string term = file.Stream[parseList[i].tagLine].Mid(parseList[i].tagStart, parseList[i].tagLength);
+                        for (int j = 0; j < TagList.Size(); j++)
+                        {
+                            if (term == TagList[j].Name && TagList[j].Type == ZMLTag.t_none)
+                            {} 
+                        }
+                        break;
+                }
+            }
+        }
+        // Empty file error, seriously, comment out the file in the translation files!
+        // You'll save thousands of lines of code erroring on your commented file!
+        // You think this high level scripting stuff isn't taxing on the system?
+        else
+        {
+            ParseErrorList.Push(new("StreamError").Init(StreamError.ERROR_ID_EMPTYFILE,
+                file.LumpNumber,
+                file.LumpHash,
+                "NOTHING TO PARSE, FILE IS EMPTY?!\n\t \ci- Please remove file from load order if everything is commented out,\n\t - you wasted A LOT of processing time getting to this error, thank you.",
+                "N/A",
+                -1,
+                -1,
+                "N/A"));
+            ParseErrorCount++;         
+        }
+    }
 
     /* - END OF METHODS - */    
 }

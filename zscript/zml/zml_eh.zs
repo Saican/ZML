@@ -50,14 +50,7 @@ class ZMLHandler : EventHandler
 
     override void WorldTick()
     {
-        if (SeedPawn)
-        {
-            ZXMLParser zml = new("ZXMLParser").Init(SeedPawn, new("ZMLTagParser").Init().TagList);
-            ZMLSeed(SeedPawn).Accessible = true;
-            SeedPawn = null;
-            console.Printf("\cf\t\t - - ZML has finished growing the XML tree!");
-        }
-        else if (Spawn)
+        if (Spawn)
         {
             [Spawn, SeedPawn] = players[consoleplayer].mo.A_SpawnItemEx("ZMLSeed");
             if (Spawn && SeedPawn)

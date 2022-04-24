@@ -37,8 +37,8 @@ class ZMLElement
             return t_bool;
         if (el ~== "t_none")
             return t_none;
-        else
-            return t_unknown;
+            
+        return t_unknown;
     }
 
     string Name;

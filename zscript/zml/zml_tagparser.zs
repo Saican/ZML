@@ -71,7 +71,7 @@ class ZMLTagParser
             for (int i = 0; i < ParseErrorList.Size(); i++)
             {
                 StreamError error = ParseErrorList[i];
-                console.printf(string.Format("\t\t\cgZML ERROR! Code: \cx%s_(%d) \cg- Lump: #\ci%d\cg, Lump Hash: \ci%d\cg, Message: \ci%s\cg\n\t\t\t - Contents of Lexer: \ci%s \cg- Last known valid data started at line: #\cii:%d\cg(\cyf:%d\cg)!\n\t\t\t - Line contents: \cc%s",
+                console.printf(string.Format("\t\t\cgZML ERROR! Code: \cx%s_(%d) \cg- Lump: #\ci%d\cg, Lump Hash: \ci%d\cg, Message: \ci%s\cg\n\t\t\t - Contents of Lexer: \ci%s \cg- Last known valid data started at line: #\cii:%d\cg(\cyf:%d\cg)!\n\t\t\t - Line contents: \cc%s\n\n",
                     error.CodeString, error.CodeId, error.LumpNumber, error.LumpHash, error.Message, error.StreamBufferContents, error.InternalLine, error.FileLine, error.FullLine));
             }
         }
@@ -240,8 +240,7 @@ class ZMLTagParser
 
         // Reset the stream
         file.Reset();
-
-        file.StreamOut();
+        //file.StreamOut();
         return true;
     }
 
@@ -546,14 +545,14 @@ class ZMLTagParser
                     switch (DefToken.StringToToken(e))
                     {
                         case DefToken.WORD_TAG:
-                            console.printf("The word is tag!");
+                            //console.printf("The word is tag!");
                             // Push a tag token
                             //PushToken(DefToken.WORD_TAG, file.Line);
                             parseList.Push(new("DefToken").Init(DefToken.WORD_TAG, file.Line));
                             // These are indices for the name and type of the tag
                             int tns = 0, tne = 0,
                                 tts = 0, tte = 0;
-                            console.printf(string.format("Line used length is: %d, zscript length: %d, full line: %s", file.Stream[file.Line].UsedLength(), file.LineLength(), file.Stream[file.Line].FullLine()));
+                            //console.printf(string.format("Line used length is: %d, zscript length: %d, full line: %s", file.Stream[file.Line].UsedLength(), file.LineLength(), file.Stream[file.Line].FullLine()));
                             // Read the rest of the line to find the name and type
                             for (int i = file.Head; i < file.LineLength(); i++)
                             {
@@ -578,13 +577,13 @@ class ZMLTagParser
                                 parseList.Push(new("DefToken").Init(DefToken.WORD_TYPE, file.Line, tts, tte - tts + 1));
                             }
 
-                            console.printf(string.format("Setting head to %d, was at %d, tag name start: %d, tag name end: %d, tag type start: %d, tag type end: %d", tte + 1, file.Head, tns, tne, tts, tte));
+                            //console.printf(string.format("Setting head to %d, was at %d, tag name start: %d, tag name end: %d, tag type start: %d, tag type end: %d", tte + 1, file.Head, tns, tne, tts, tte));
                             // Move the head to the double quote at the end of the type
                             file.Head = tte + 1;
                             break;
 
                         case DefToken.WORD_ATTRIBUTE:
-                            console.printf("Got an attribute list!");
+                            //console.printf("Got an attribute list!");
                             // Read the next lines until we find a close brace
                             for (int i = file.Line; i < file.Lines(); i++)
                             {
@@ -651,23 +650,23 @@ class ZMLTagParser
 
                         // Flags each have their own token
                         case DefToken.WORD_FLAG_ADDTYPE:
-                            console.printf("Add type flag found!");
+                            //console.printf("Add type flag found!");
                             parseList.Push(new("DefToken").Init(DefToken.WORD_FLAG_ADDTYPE, file.Line));
                             break;
                         
                         case DefToken.WORD_FLAG_OVERWRITE:
-                            console.printf("Overwrite flag found!");
+                            //console.printf("Overwrite flag found!");
                             parseList.Push(new("DefToken").Init(DefToken.WORD_FLAG_OVERWRITE, file.Line));
                             break;
 
                         case DefToken.WORD_FLAG_OBEYINCOMING:
-                            console.printf("Obey incoming flag found!");
+                            //console.printf("Obey incoming flag found!");
                             parseList.Push(new("DefToken").Init(DefToken.WORD_FLAG_OBEYINCOMING, file.Line));
                             break;
 
                         // This instructs the parser to store whatever it's working on
                         case DefToken.WORD_TERMINATE:
-                            console.printf("Terminating something!");
+                            //console.printf("Terminating something!");
                             parseList.Push(new("DefToken").Init(DefToken.WORD_TERMINATE, file.Line));
                             break;
                     }
@@ -679,7 +678,7 @@ class ZMLTagParser
         }
 
         file.Reset();
-        TokenListOut(file, parseList);
+        //TokenListOut(file, parseList);
         return true;
     }
 
@@ -704,12 +703,36 @@ class ZMLTagParser
         // Check that the list has something in it
         if (parseList.Size() > 0)
         {
+            // One last pre-parse check that can end this - invalid types
+            // This can be checked from the parse list
+            for (int i = 0; i < parseList.Size(); i++)
+            {
+                if (parseList[i].t == DefToken.WORD_TYPE)
+                {
+                    int t = ZMLElement.GetType(file.Stream[parseList[i].line].Mid(parseList[i].start, parseList[i].length));
+                    if (t == ZMLElement.t_unknown)
+                    {
+                        ParseErrorList.Push(new("StreamError").Init(StreamError.ERROR_ID_INVALIDTYPE,
+                            file.LumpNumber,
+                            file.LumpHash,
+                            "INVALID TYPE ENUMERATION DETECTED!",
+                            file.Stream[parseList[i].line].Mid(parseList[i].start, parseList[i].length),
+                            i,
+                            file.Stream[i].TrueLine,
+                            file.Stream[i].FullLine()));
+                        ParseErrorCount++;          
+                        return;      
+                    }            
+                }
+            }
+
             // The only birds in the flock!  We have to differentiate between attributes and tags
             bool openTag = false,
                 openAttribute = false;
             // Read through the token list
             for (int i = 0; i < parseList.Size(); i++)
             {
+                // Should have an error free time from here!
                 switch(parseList[i].t)
                 {
                     // Create a new tag
@@ -729,7 +752,7 @@ class ZMLTagParser
                         else if (openAttribute)
                             TagList[TagList.Size() - 1].Attributes[TagList[TagList.Size() - 1].Attributes.Size() - 1].Name = file.Stream[parseList[i].line].Mid(parseList[i].start, parseList[i].length);
                         break;
-                    // Assign a type to something
+                    // Assign a type to something - this is protected by the above check
                     case DefToken.WORD_TYPE:
                         if (openTag && !openAttribute)
                             TagList[TagList.Size() - 1].Type = ZMLElement.GetType(file.Stream[parseList[i].line].Mid(parseList[i].start, parseList[i].length));
@@ -759,16 +782,17 @@ class ZMLTagParser
         else
         {
             ParseErrorList.Push(new("StreamError").Init(StreamError.ERROR_ID_EMPTYFILE,
-            file.LumpNumber,
-            file.LumpHash,
-            "NOTHING TO PARSE, FILE IS EMPTY?!",
-            "N/A",
-            -1,
-            -1,
-            "N/A"));
+                file.LumpNumber,
+                file.LumpHash,
+                "NOTHING TO PARSE, FILE IS EMPTY?!\n\t \ci- Please remove file from load order if everything is commented out,\n\t - you wasted A LOT of processing time getting to this error, thank you.",
+                "N/A",
+                -1,
+                -1,
+                "N/A"));
+            ParseErrorCount++;
         }
 
-        TagListOut();
+        //TagListOut();
     }
 
     /*
