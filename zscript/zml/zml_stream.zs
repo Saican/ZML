@@ -184,6 +184,9 @@ class FileStream
         NOTE! The duplicate read problem is fixed, however
         I decided to leave this feature more for informational
         purposes now than anything; maybe a failsafe.
+
+        NOTE NOTE!  This function is reused and tweaked
+        throughout ZML - repeat credit to the author on SO!
     
     */
     static int GetLumpHash(string rl)

@@ -9,7 +9,7 @@
 
 version "4.2.1"
 
-#include "zscript/zml/zml_avl.zs"
+#include "zscript/zml/zml_bst.zs"
 #include "zscript/zml/zml_charset.zs"
 #include "zscript/zml/zml_deftoken.zs"
 #include "zscript/zml/zml_eh.zs"

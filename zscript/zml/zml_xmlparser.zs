@@ -16,6 +16,7 @@
 
 class ZXMLParser
 {
+    // ASCII constants of the valid syntax chars
     const CHAR_ID_EXCLAMATION = 33;
     const CHAR_ID_DOUBLEQUOTE = 34;
     const CHAR_ID_HYPHEN = 45;
@@ -27,6 +28,7 @@ class ZXMLParser
     const CHAR_ID_GREATERTHAN = 62;
     const CHAR_ID_UNDERSCORE = 95;
 
+    // Store that set so that one part of the File Stream works
     ZMLCharset XMLCharSet;
     private void makeCharset()
     {
@@ -42,16 +44,21 @@ class ZXMLParser
         XMLCharSet.CodeChars.Push(CHAR_ID_UNDERSCORE);
     }
 
+    // File streams are split between translation units and definition files
+    // The both get shoved in the tree though
     array<FileStream> TranslationStreams;
     array<FileStream> DefinitionStreams;
-
+    // Rather than add onto the file stream we just store the file names
+    // Access witchyness means we just access this in the same order as the files
     array<string> DefinitionNames;
 
+    // Error handling
     int TranslationParseErrorCount,
         DefinitionParseErrorCount;
     array<StreamError> TranslationParseErrorList;
     array<StreamError> DefinitionParseErrorList;
 
+    // The tree itself
     ZMLNode XMLTree;
 
     /*
@@ -92,6 +99,8 @@ class ZXMLParser
         // character sets establish the language syntax.
         makeCharset();
 
+        int Seed = Random();
+
         // XML Parsing basically happens twice.
         // The translation files themselves are xml, 
         // thus the whole thing needs ran on those 
@@ -106,7 +115,14 @@ class ZXMLParser
                 false)
             {
                 Tokenize(TranslationStreams[i], TagList, parseList);
-                Parse(TranslationStreams[i], "zml", TagList, parseList, XMLTree, TranslationParseErrorList, TranslationParseErrorCount);
+                Parse(TranslationStreams[i], 
+                    Seed,
+                    "zml", 
+                    TagList, 
+                    parseList, 
+                    XMLTree, 
+                    TranslationParseErrorList, 
+                    TranslationParseErrorCount);
             }
             else
                 TranslationParseErrorCount++;
@@ -122,7 +138,14 @@ class ZXMLParser
                 false)
             {
                 Tokenize(DefinitionStreams[i], TagList, parseList);
-                Parse(DefinitionStreams[i], DefinitionNames[i], TagList, parseList, XMLTree, DefinitionParseErrorList, DefinitionParseErrorCount);
+                Parse(DefinitionStreams[i], 
+                    Seed,
+                    DefinitionNames[i], 
+                    TagList, 
+                    parseList, 
+                    XMLTree, 
+                    DefinitionParseErrorList, 
+                    DefinitionParseErrorCount);
             }
             else
                 DefinitionParseErrorCount++;
@@ -236,6 +259,14 @@ class ZXMLParser
         return "";
     }
 
+    /*
+        XML only has the comment tag so finding that and removing it
+        is fairly straightforward.
+
+        Actually no it's not.  The whole Charset thing enabled the
+        PeekEnd function of the FileStream to find anything.  Later
+        I search for terminators directly.
+    */
     private bool Sanitize_StreamComments(in out FileStream file, in out array<StreamError> ParseErrorList)
     {
         string e = "";
@@ -297,6 +328,9 @@ class ZXMLParser
         return true;
     }  
 
+    /*
+        The vast majority of the error checking is done here.
+    */
     private bool Check_StreamContinuity(in out FileStream file, in array<ZMLTag> TagList, in out array<StreamError> ParseErrorList)
     {
         // A few syntax chars can be reliably 
@@ -622,14 +656,7 @@ class ZXMLParser
     }
 
     /*
-        Tokenizing and Parsing are going to be the hardest
-        50 feet to run aren't they?
-
-        Ok, xml describes a tree structure.
-        Going up, everything is a child.
-        Going down, everything is root, aka a parent.
-        It looks backwards in the file, further into the
-        structure is further up the tree.
+        Generates the XMLToken list.
     */
     private void Tokenize(in out FileStream file, in array<ZMLTag> TagList, in out array<XMLToken> parseList)
     {
@@ -816,7 +843,7 @@ class ZXMLParser
         Turn it into the XML tree.
         Finally.
     */
-    private void Parse(in out FileStream file, string fileName, 
+    private void Parse(in out FileStream file, int Seed, string fileName, 
         in array<ZMLTag> TagList, 
         in out array<XMLToken> parseList, 
         in out ZMLNode Root, 
@@ -841,30 +868,28 @@ class ZXMLParser
                             if (Root)
                             {
                                 console.printf("Inserting on root");
-                                r = Root.Insert(Root,
+                                r = Root.InsertNode(Root, Seed, fileName,
                                         file.Stream[parseList[i].tagLine].Mid(parseList[i].tagStart, parseList[i].tagLength),
-                                        fileName,
                                         "");
                             }
                             // No root either, so make a root
                             else
                             {
                                 console.printf("Making new root");
-                                r = Root = new("ZMLNode").Init(file.Stream[parseList[i].tagLine].Mid(parseList[i].tagStart, parseList[i].tagLength),
-                                        fileName,
+                                r = Root = new("ZMLNode").Init(Seed, fileName,
+                                        file.Stream[parseList[i].tagLine].Mid(parseList[i].tagStart, parseList[i].tagLength),
                                         "");
                             }
                         }
                         // We do have a root, so this needs to be a child node, check if we have children and insert on that tree
                         else if (r.Children)
-                            r = r.Children.Insert(r.Children,
+                            r = r.Children.InsertNode(r.Children, Seed, fileName,
                                     file.Stream[parseList[i].tagLine].Mid(parseList[i].tagStart, parseList[i].tagLength),
-                                    fileName,
                                     "");
                         // Nope, first child
                         else
-                            r = r.Children = new("ZMLNode").Init(file.Stream[parseList[i].tagLine].Mid(parseList[i].tagStart, parseList[i].tagLength),
-                                    fileName,
+                            r = r.Children = new("ZMLNode").Init(Seed, fileName, 
+                                    file.Stream[parseList[i].tagLine].Mid(parseList[i].tagStart, parseList[i].tagLength),
                                     "");
                         break;
                     // Create a node that will contain data
@@ -877,21 +902,20 @@ class ZXMLParser
                         {
                             // And that internal root has children, so insert into that tree
                             if(r.Children)
-                                r.Children.Insert(r.Children, 
+                                r.Children.InsertNode(r.Children, Seed, fileName,
                                     file.Stream[parseList[i].tagLine].Mid(parseList[i].tagStart, parseList[i].tagLength),
-                                    fileName,
                                     file.Stream[parseList[i].dataLine].Mid(parseList[i].dataStart, parseList[i].dataLength));
                             // First child on that tree
                             else
-                                r.Children = new("ZMLNode").Init(file.Stream[parseList[i].tagLine].Mid(parseList[i].tagStart, parseList[i].tagLength),
-                                    fileName,
+                                r.Children = new("ZMLNode").Init(Seed, fileName,
+                                    file.Stream[parseList[i].tagLine].Mid(parseList[i].tagStart, parseList[i].tagLength),
                                     file.Stream[parseList[i].dataLine].Mid(parseList[i].dataStart, parseList[i].dataLength));
                         }
                         // Rar - luckily this is handled fairly gracefully, DeleteNode can be called on the tree itself
                         // to just get rid of this entire thing.  Additional continuity checking would save the time getting here.
                         else
                         {
-                            XMLTree.DeleteNode(FindFile(fileName, XMLTree), FindFile(fileName, XMLTree).Weight);
+                            XMLTree.Delete(FindFile(fileName, XMLTree), fileName);
                             ParseErrorList.Push(new("StreamError").Init(StreamError.ERROR_ID_NODE_DISORDER,
                                 file.LumpNumber,
                                 file.LumpHash,
@@ -919,6 +943,7 @@ class ZXMLParser
         // Empty file error, seriously, comment out the file in the translation files!
         // You'll save thousands of lines of code erroring on your commented file!
         // You think this high level scripting stuff isn't taxing on the system?
+        // I'm sure the devs have optimized the hell out of ZScript but I'm gonna bitch and moan about you wasting my time anyway.
         else
         {
             ParseErrorList.Push(new("StreamError").Init(StreamError.ERROR_ID_EMPTYFILE,
