@@ -23,7 +23,6 @@ class ZXMLParser
     const CHAR_ID_HYPHEN = 45;
     const CHAR_ID_PERIOD = 46;
     const CHAR_ID_BACKSLASH = 47;
-    const CHAR_ID_COLON = 58;
     const CHAR_ID_LESSTHAN = 60;
     const CHAR_ID_EQUAL = 61;
     const CHAR_ID_GREATERTHAN = 62;
@@ -39,7 +38,6 @@ class ZXMLParser
         XMLCharSet.CodeChars.Push(CHAR_ID_HYPHEN);
         XMLCharSet.CodeChars.Push(CHAR_ID_PERIOD);
         XMLCharSet.CodeChars.Push(CHAR_ID_BACKSLASH);
-        XMLCharSet.CodeChars.Push(CHAR_ID_COLON);
         XMLCharSet.CodeChars.Push(CHAR_ID_LESSTHAN);
         XMLCharSet.CodeChars.Push(CHAR_ID_EQUAL);
         XMLCharSet.CodeChars.Push(CHAR_ID_GREATERTHAN);
@@ -161,7 +159,8 @@ class ZXMLParser
         if (DefinitionParseErrorCount > 0)
             ErrorOutput(DefinitionParseErrorList, DefinitionParseErrorCount, "definition");
 
-        XMLTree.NodeOut();
+        //if (XMLTree)
+            //XMLTree.NodeOut();
 
         return self;
     }
@@ -326,7 +325,7 @@ class ZXMLParser
         }
         file.Stream.ShrinkToFit();
         file.Reset();
-        file.StreamOut();
+        //file.StreamOut();
         return true;
     }  
 
@@ -339,6 +338,7 @@ class ZXMLParser
         // checked for by just counting them,
         // while others have variable uses
         int qc = 0,     // Quote count
+            sqc = 0,    // Single quote count
             ltc = 0,    // Less than count
             gtc = 0;    // Greater than count
         // This is a standard file loop that checks for the end of the file
@@ -356,6 +356,7 @@ class ZXMLParser
                 switch (b)
                 {
                     case CHAR_ID_DOUBLEQUOTE: qc++; break;
+                    case CHAR_ID_SINGLEQUOTE: sqc++; break;
                     case CHAR_ID_LESSTHAN: ltc++; break;
                     case CHAR_ID_GREATERTHAN: gtc++; break;
                 }
@@ -406,6 +407,33 @@ class ZXMLParser
                         file.Stream[i].TrueLine, 
                         file.Stream[i].FullLine()));
                     return false;
+                }
+            }
+        }
+
+        // Single quote count - same things as double quotes
+        if (sqc % 2 != 0)
+        {
+            for (int i =0; i < file.Lines(); i++)
+            {
+                int lqc = 0;
+                for (int j = 0; j < file.LineLengthAt(i); j++)
+                {
+                    if (file.ByteAt(i, j) == CHAR_ID_SINGLEQUOTE)
+                        lqc++;
+                }
+
+                if (lqc > 0 && lqc % 2 != 0)
+                {
+                    ParseErrorList.Push(new("StreamError").Init(StreamError.ERROR_ID_OPENSTRING, 
+                        file.LumpNumber, 
+                        file.LumpHash, 
+                        "UNCLOSED STRING FOUND!", 
+                        "N/A", 
+                        i, 
+                        file.Stream[i].TrueLine, 
+                        file.Stream[i].FullLine()));
+                    return false;                   
                 }
             }
         }
@@ -666,7 +694,6 @@ class ZXMLParser
         in out array<StreamError> ParseErrorList, 
         in out int ParseErrorCount)
     {
-        console.printf("\cf\t - XML Tokenizing...");
         string e = "";
         while (file.StreamIndex() < file.StreamLength())
         {
@@ -751,7 +778,7 @@ class ZXMLParser
                     // The reason for this is how nodes are read,
                     // which involves moving the stream around.
                     // In fact this spot is between two such instances
-                    // of serious file stream shenanigans.
+                    // of serious file stream shenanigans - and involves its own.
                     array<XMLToken> tempAtts;
                     if (ha)
                     {
@@ -778,7 +805,7 @@ class ZXMLParser
                                     string tad = "";
                                     for (int k = ads; k < file.LineLength(); k++)
                                     {
-                                        if (file.ByteAt(file.Line, k) == CHAR_ID_DOUBLEQUOTE)
+                                        if (file.ByteAt(file.Line, k) == CHAR_ID_DOUBLEQUOTE || file.ByteAt(file.Line, k) == CHAR_ID_SINGLEQUOTE)
                                         {
                                             ade = k - 1;
                                             i = k + 1;
@@ -905,7 +932,7 @@ class ZXMLParser
         // Not really needed at this point but just good manners
         file.Reset();
         // If in doubt uncomment this
-        TokenListOut(file, parseList);
+        //TokenListOut(file, parseList);
     }
 
     /*
@@ -947,8 +974,6 @@ class ZXMLParser
     {
         if (parseList.Size() > 0)
         {
-            console.printf("Yay tokens and a seed, lets grow a tree!");
-
             ZMLNode r = null,
                 c = null;
             for (int i = 0; i < parseList.Size(); i++)
@@ -962,20 +987,14 @@ class ZXMLParser
                         {
                             // We do have a root, we can insert on it
                             if (Root)
-                            {
-                                console.printf("Inserting on root");
                                 r = Root.InsertNode(Root, Seed, fileName,
                                         file.Stream[parseList[i].tagLine].Mid(parseList[i].tagStart, parseList[i].tagLength),
                                         "");
-                            }
                             // No root either, so make a root
                             else
-                            {
-                                console.printf("Making new root");
                                 r = Root = new("ZMLNode").Init(Seed, fileName,
                                         file.Stream[parseList[i].tagLine].Mid(parseList[i].tagStart, parseList[i].tagLength),
                                         "");
-                            }
                         }
                         // We do have a root, so this needs to be a child node, check if we have children and insert on that tree
                         else if (r.Children)

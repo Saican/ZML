@@ -9,8 +9,9 @@
 
 /* 
 
-    The ZMLSeed is either spawned by the EventHandler or placed by a map author,
-    with the latter option existing to apply settings.
+    The ZMLSeed is either spawned by the EventHandler or placed by a map author.
+
+    THERE ONLY EVER NEEDS TO BE ONE SEED IN A LEVEL
 
     The ZMLSeed is the API that is used to access the XML Tree.
 */

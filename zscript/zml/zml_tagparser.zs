@@ -647,28 +647,6 @@ class ZMLTagParser
                                 }
                             }
                             break;
-
-                        // Flags each have their own token
-                        case DefToken.WORD_FLAG_ADDTYPE:
-                            //console.printf("Add type flag found!");
-                            parseList.Push(new("DefToken").Init(DefToken.WORD_FLAG_ADDTYPE, file.Line));
-                            break;
-                        
-                        case DefToken.WORD_FLAG_OVERWRITE:
-                            //console.printf("Overwrite flag found!");
-                            parseList.Push(new("DefToken").Init(DefToken.WORD_FLAG_OVERWRITE, file.Line));
-                            break;
-
-                        case DefToken.WORD_FLAG_OBEYINCOMING:
-                            //console.printf("Obey incoming flag found!");
-                            parseList.Push(new("DefToken").Init(DefToken.WORD_FLAG_OBEYINCOMING, file.Line));
-                            break;
-
-                        // This instructs the parser to store whatever it's working on
-                        case DefToken.WORD_TERMINATE:
-                            //console.printf("Terminating something!");
-                            parseList.Push(new("DefToken").Init(DefToken.WORD_TERMINATE, file.Line));
-                            break;
                     }
 
                     // Got a valid token so purge the buffer
@@ -758,16 +736,6 @@ class ZMLTagParser
                             TagList[TagList.Size() - 1].Type = ZMLElement.GetType(file.Stream[parseList[i].line].Mid(parseList[i].start, parseList[i].length));
                         else if (openAttribute)
                             TagList[TagList.Size() - 1].Attributes[TagList[TagList.Size() - 1].Attributes.Size() - 1].Type = ZMLElement.GetType(file.Stream[parseList[i].line].Mid(parseList[i].start, parseList[i].length));
-                        break;
-                    // Assign flags - this is how the rule of "the last one wins" is enforced
-                    case DefToken.WORD_FLAG_ADDTYPE:
-                        TagList[TagList.Size() - 1].Handling = ZMLTag.HF_AddType;
-                        break;
-                    case DefToken.WORD_FLAG_OVERWRITE:
-                        TagList[TagList.Size() - 1].Handling = ZMLTag.HF_Overwrite;
-                        break;
-                    case DefToken.WORD_FLAG_OBEYINCOMING:
-                        TagList[TagList.Size() - 1].Handling = ZMLTag.HF_ObeyIncoming;
                         break;
                     // End whatever, here it's just so we don't assign to the wrong thing
                     case DefToken.WORD_TERMINATE:

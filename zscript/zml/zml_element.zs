@@ -54,20 +54,10 @@ class ZMLElement
 
 class ZMLTag : ZMLElement
 {
-    enum HFLAG
-    {
-        HF_Strict,
-        HF_AddType,
-        HF_Overwrite,
-        HF_ObeyIncoming,
-    };
-    HFLAG Handling;
-
     array<ZMLElement> Attributes;
 
     ZMLTag Init(string Name, string Type) 
     {
-        Handling = HF_Strict;
         return ZMLTag(super.Init(Name, Type)); 
     }
 }
