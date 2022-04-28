@@ -8,8 +8,6 @@
 
 tag "zml", "t_none"
 {
-    overwrite;
-
     attributes
     {
         "namespace", "t_string";
