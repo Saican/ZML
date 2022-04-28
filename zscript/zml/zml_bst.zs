@@ -4,21 +4,40 @@
     Who: Sarah Blackburn
     When: 24/04/22
 
+    It actually occurs to me that this file is one of the most important
+    in the whole thing, as these classes define the entirety of the
+    XML tree, thus I should probably document.
+
 */
 
+/*
+    Every node in the tree is a ZMLNode.
+    The node IS the binary tree, meaning
+    each node can become its own tree.
+
+*/
 class ZMLNode
 {
-    string FileName, Name, Data;
+    string FileName,    // Translation units end up being called "zml", but everything else will be the definition file name
+        Name,           // The tag name
+        Data;           // What the tag contains - API or user functions will just have to cast.
 
-    int Weight,
-        Seed;
+    int Weight,         // Internal value governing place in the tree;
+        Seed;           // This is a random value generated when the parser runs, it's used in hashing to help "randomness"
 
-    ZMLNode Children,
-        LeftSibling,
+    // Descendent Tree Nodes
+    ZMLNode Children,   // If a node is contained in this one, it will be a child
+        LeftSibling,    // If a node is contained alongside this one, it will be a sibling
         RightSibling;
 
+    // Attributes are garbage and should not be a thing
+    // They honestly add a bunch of extra string witchcraft to an already nicely woven spell.
     array<ZMLAttribute> Attributes;
 
+    /*
+        Takes a string and an integer and makes
+        a mess of an integer of it.
+    */
     int Hash(string d, int r)
     {
         int a = 54059;
@@ -31,19 +50,29 @@ class ZMLNode
         return h * r % c;
     }
 
-    int InsertWeight(string f) { return Hash(string.Format("%sz%sm%sl", f, f, f), Seed); }
+    /*
+        Returns the Weight of the node
+        by calling Hash and formatting the string
+    */
+    int InsertWeight(string f, string n, string d) { return Hash(string.Format("%sz%sm%sl", f, n, d), Seed); }
 
+    /*
+        Node constructor
+    */
     ZMLNode Init(int Seed, string FileName, string Name, string Data)
     {
         self.FileName = FileName;
         self.Name = Name;
         self.Data = Data;
-        self.Weight = Hash(string.Format("%sz%sm%sl", FileName, FileName, FileName), Seed);
+        self.Weight = Hash(string.Format("%sz%sm%sl", FileName, Name, Data), Seed);
         self.Seed = Seed;
         Children = LeftSibling = RightSibling = null;
         return self;
     }
 
+    /*
+        Inserts a sibling node
+    */
     ZMLNode InsertNode(in out ZMLNode Tree, int Seed, string FileName, string Name, string Data)
     {
         if (!Tree)
@@ -51,22 +80,28 @@ class ZMLNode
             Tree = new("ZMLNode").Init(Seed, FileName, Name, Data);
             return Tree;
         }
-        else if (Tree.Weight > InsertWeight(FileName))
+        else if (Tree.Weight > InsertWeight(FileName, Name, Data))
             return InsertNode(Tree.LeftSibling, Seed, FileName, Name, Data);
         else
             return InsertNode(Tree.RightSibling, Seed, FileName, Name, Data);
     }
 
+    /*
+        Eliminates any node attached to the given filename
+    */
     void Delete(ZMLNode Tree, string FileName)
     {
-        if (Tree.Weight > InsertWeight(FileName))
+        if (Tree.Weight > InsertWeight(FileName, Name, Data))
             Delete(Tree.LeftSibling, FileName);
-        else if (Tree.Weight < InsertWeight(FileName))
+        else if (Tree.Weight < InsertWeight(FileName, Name, Data))
             Delete(Tree.RightSibling, FileName);
         else
             DeleteNode(Tree);
     }
 
+    /*
+        Does the deleting
+    */
     private void DeleteNode(in out ZMLNode Tree)
     {
         string d;
@@ -83,6 +118,9 @@ class ZMLNode
         }
     }
 
+    /*
+        Utility for deletion
+    */
     private string GetPredecessor(in out ZMLNode Tree)
     {
         while (Tree.RightSibling)
@@ -90,6 +128,11 @@ class ZMLNode
         return Tree.Data;
     }
 
+    /*
+        Debug function for printing the node contents.
+        Best thing is to call this on the tree root
+        so it's executed on the whole tree.
+    */
     clearscope void NodeOut()
     {
         console.printf(string.format("ZMLNode, Name: %s, from file: %s, contains data: %s\n\tnode weight: %d\n\tnode has children: %s, root child name: %s\n\tnode has left sibling: %s, left sibling name: %s\n\tnode has right sibling: %s, right sibling name: %s\n\n",
@@ -101,6 +144,9 @@ class ZMLNode
             RightSibling ? "yes" : "no",
             RightSibling ? RightSibling.Name : "N/A"));
 
+        for (int i = 0; i < Attributes.Size(); i++)
+            console.printf(string.Format("Node, %s, contains attribute named: %s, with value: %s", Name, Attributes[i].Name, Attributes[i].Value));
+
         if (Children)
             Children.NodeOut();
         if (LeftSibling)
@@ -109,6 +155,51 @@ class ZMLNode
             RightSibling.NodeOut();
     }
 
+    /*
+        Returns the node who is the ancestor
+        of the node with the given weight.
+        The tree is one way so all searching is
+        from the top.
+    */
+    clearscope ZMLNode FindParentNode(int w, in out ZMLNode Root)
+    {
+        if (w == Root.Weight)
+            return null;
+
+        ZMLNode n;
+
+        if (Root.Children)
+        {
+            if (w == Root.Children.Weight)
+                n = Root;
+            else
+                n = Root.FindParentNode(w, Root.Children);
+        }
+
+        if (Root.LeftSibling)
+        {
+            if (w == Root.LeftSibling.Weight)
+                n = Root;
+            else
+                n = Root.FindParentNode(w, Root.LeftSibling);
+        }
+
+        if (Root.RightSibling)
+        {
+            if (w == Root.RightSibling.Weight)
+                n = Root;
+            else
+                n = Root.FindParentNode(w, Root.RightSibling);
+        }
+
+        return n;
+    }
+
+    /*
+        Returns a collection of elements
+        matching the given name.  Searching
+        will begin at the given root.
+    */
     clearscope void FindElements(string Name, in ZMLNode Root, in out array<ZMLNode> Elements)
     {
         if (Root.Name == Name)
@@ -127,6 +218,10 @@ class ZMLNode
     /* - END OF METHODS - */
 }
 
+
+/*
+    You are the little tumor on my otherwise nice XML parser
+*/
 class ZMLAttribute
 {
     string Name, Value;
@@ -137,4 +232,6 @@ class ZMLAttribute
         self.Value = Value;
         return self;
     }
+
+    /* - END OF METHODS - */
 }

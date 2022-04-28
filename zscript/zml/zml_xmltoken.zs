@@ -12,6 +12,7 @@ class XMLToken
     {
         WORD_ROOT,
         WORD_NODE,
+        WORD_ATTRIBUTE,
         WORD_TERMINATE,
         WORD_NONE,
     };
@@ -35,6 +36,7 @@ class XMLToken
         {
             case WORD_ROOT: return "WORD_ROOT";
             case WORD_NODE: return "WORD_NODE";
+            case WORD_ATTRIBUTE: return "WORD_ATTRIBUTE";
             case WORD_TERMINATE: return "WORD_TERMINATE";
             default: return "WORD_NONE";
         }

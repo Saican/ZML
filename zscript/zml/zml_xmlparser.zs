@@ -19,6 +19,7 @@ class ZXMLParser
     // ASCII constants of the valid syntax chars
     const CHAR_ID_EXCLAMATION = 33;
     const CHAR_ID_DOUBLEQUOTE = 34;
+    const CHAR_ID_SINGLEQUOTE = 39;
     const CHAR_ID_HYPHEN = 45;
     const CHAR_ID_PERIOD = 46;
     const CHAR_ID_BACKSLASH = 47;
@@ -34,6 +35,7 @@ class ZXMLParser
     {
         XMLCharSet.CodeChars.Push(CHAR_ID_EXCLAMATION);
         XMLCharSet.CodeChars.Push(CHAR_ID_DOUBLEQUOTE);
+        XMLCharSet.CodeChars.Push(CHAR_ID_SINGLEQUOTE);
         XMLCharSet.CodeChars.Push(CHAR_ID_HYPHEN);
         XMLCharSet.CodeChars.Push(CHAR_ID_PERIOD);
         XMLCharSet.CodeChars.Push(CHAR_ID_BACKSLASH);
@@ -114,7 +116,7 @@ class ZXMLParser
                 Check_StreamContinuity(TranslationStreams[i], TagList, TranslationParseErrorList) :
                 false)
             {
-                Tokenize(TranslationStreams[i], TagList, parseList);
+                Tokenize(TranslationStreams[i], TagList, parseList, TranslationParseErrorList, TranslationParseErrorCount);
                 Parse(TranslationStreams[i], 
                     Seed,
                     "zml", 
@@ -137,7 +139,7 @@ class ZXMLParser
                 Check_StreamContinuity(DefinitionStreams[i], TagList, DefinitionParseErrorList) :
                 false)
             {
-                Tokenize(DefinitionStreams[i], TagList, parseList);
+                Tokenize(DefinitionStreams[i], TagList, parseList, DefinitionParseErrorList, DefinitionParseErrorCount);
                 Parse(DefinitionStreams[i], 
                     Seed,
                     DefinitionNames[i], 
@@ -658,7 +660,11 @@ class ZXMLParser
     /*
         Generates the XMLToken list.
     */
-    private void Tokenize(in out FileStream file, in array<ZMLTag> TagList, in out array<XMLToken> parseList)
+    private void Tokenize(in out FileStream file, 
+        in array<ZMLTag> TagList, 
+        in out array<XMLToken> parseList, 
+        in out array<StreamError> ParseErrorList, 
+        in out int ParseErrorCount)
     {
         console.printf("\cf\t - XML Tokenizing...");
         string e = "";
@@ -675,10 +681,15 @@ class ZXMLParser
                     tl = file.Line,     // Record the line the tag was on
                     ts = file.Head,     // The start of the tag is wherever head is now
                     te = 0;             // The end can be 0 until we find it
+
+                bool ha = false;
                 // Read the line from where Head is
                 for (int i = file.Head; i < file.LineLength(); i++)
                 {
                     // Append chars to the temp buffer and then search the tag list each time to see if we have a tag
+                    // So this whole thing checking the tag is dealing with false matches.  If two tags share the same
+                    // words it can cause conflicts.  Attributes will also cause the tag to not be the right size.
+                    // Stupid, stupid, attributes.
                     if (file.ByteAt(file.Line, i) != CHAR_ID_GREATERTHAN)
                         st.AppendFormat("%s", file.CharAt(file.Line, i));
                     else
@@ -704,7 +715,10 @@ class ZXMLParser
                                 as.AppendFormat("%s", st.Mid(j, 1));
                                 for (int k = 0; k < TagList.Size(); k++)
                                 {
-                                    if (as == TagList[k].Name && (TagList[k].Attributes.Size() == 0 ? as.Length() == TagList[k].Name.Length() : true))
+                                    if (as == TagList[k].Name &&                        // The name matches
+                                        (TagList[k].Attributes.Size() == 0 ?            // There's no attributes
+                                            as.Length() == TagList[k].Name.Length() :   // Ok verify by the string length
+                                            true))                                      // No there are attributes so skip verifying
                                     {
                                         td = k;
                                         te = ts + as.Length() - 1;
@@ -713,7 +727,11 @@ class ZXMLParser
                                 }
 
                                 if (td > -1)
+                                {
+                                    if (TagList[td].Attributes.Size() > 0)
+                                        ha = true;
                                     break;
+                                }
                             }
                         }
                     }
@@ -726,6 +744,61 @@ class ZXMLParser
                 // SHOULD have a valid tag, but just in case check anyway
                 if (td > -1)
                 {
+                    // Attributes have to be read from here,
+                    // placed into a temp array, and then
+                    // pushed into the actual token list on
+                    // the other side of the node tokenizing.
+                    // The reason for this is how nodes are read,
+                    // which involves moving the stream around.
+                    // In fact this spot is between two such instances
+                    // of serious file stream shenanigans.
+                    array<XMLToken> tempAtts;
+                    if (ha)
+                    {
+                        string tab = "";
+                        int al = file.Line,
+                            as = te + 1,
+                            ae = 0;
+                        for (int i = as; i < file.LineLength(); i++)
+                        {
+                            // Append until we hit an equal sign
+                            if (file.ByteAt(file.Line, i) != CHAR_ID_EQUAL)
+                                tab.AppendFormat("%s", file.CharAt(file.Line, i));
+                            else
+                            {
+                                ae = i - 1;
+
+                                // Ok, find which attribute it is
+                                for (int j = 0; j < TagList[td].Attributes.Size(); j++)
+                                {
+
+                                    int adl = file.Line,
+                                        ads = i + 2,
+                                        ade = 0;
+                                    string tad = "";
+                                    for (int k = ads; k < file.LineLength(); k++)
+                                    {
+                                        if (file.ByteAt(file.Line, k) == CHAR_ID_DOUBLEQUOTE)
+                                        {
+                                            ade = k - 1;
+                                            i = k + 1;
+                                            tempAtts.Push(new("XMLToken").Init(XMLToken.WORD_ATTRIBUTE,
+                                                al, as, ae - as + 1,
+                                                adl, ads, ade - ads + 1));
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                        }             
+                    }
+
+                    // Terminator data is needed in multiple spots so it's gotta be scoped higher
+                    int xl = -1,    // Terminator line
+                        xs = -1,    // Terminator start
+                        xe = 0;     // Terminator end 
+
+                    // Do something based on the type
                     switch(TagList[td].Type)
                     {
                         // Roots contain other nodes - they will be terminated after child nodes
@@ -772,10 +845,6 @@ class ZXMLParser
                                 tl, ts, te - ts + 1,
                                 dl, ds, de - ds + 1));
 
-                            // Ok, manually terminate the tag
-                            int xl = -1,    // Terminator line
-                                xs = -1,    // Terminator start
-                                xe = 0;     // Terminator end - seeing a pattern yet?
                             // Do the same check when figuring out where the data ends
                             // This means the terminator is on its own line - perfectly valid XML
                             if (tee - 1 != dl)
@@ -792,10 +861,36 @@ class ZXMLParser
                                 xe = file.Stream[xl].Length() - 2;
                             }
                             // That's it - a terminator stores in the tag members
-                            parseList.Push(new("XMLToken").Init(XMLToken.WORD_TERMINATE,
-                                xl, xs, xe - xs + 1));
+                            if (!ha)
+                                parseList.Push(new("XMLToken").Init(XMLToken.WORD_TERMINATE,
+                                    xl, xs, xe - xs + 1));
                             break;
                     }
+
+                    // Both node types can have attributes
+                    if (ha)
+                    {
+                        for (int i = 0; i < tempAtts.Size(); i++)
+                        parseList.Push(tempAtts[i]);
+
+                        // If it's not a root node we need to terminate it manually
+                        if (TagList[td].Type != ZMLTag.t_none)
+                            parseList.Push(new("XMLToken").Init(XMLToken.WORD_TERMINATE,
+                                xl, xs, xe - xs + 1));
+                    }
+                }
+                // No, seriously, how did we get here?
+                else
+                {
+                    ParseErrorList.Push(new("StreamError").Init(StreamError.ERROR_ID_UNKNOWN_XML_IDENTIFIER,
+                        file.LumpNumber,
+                        file.LumpHash,
+                        "UNKNOWN XML IDENTIFIER (TAG) DETECTED!",
+                        st,
+                        file.Line,
+                        file.Stream[file.Line].TrueLine,
+                        file.Stream[file.Line].FullLine()));
+                    ParseErrorcount++;             
                 }
             }
             // All other terminators should be root terminators.
@@ -854,7 +949,8 @@ class ZXMLParser
         {
             console.printf("Yay tokens and a seed, lets grow a tree!");
 
-            ZMLNode r = null;
+            ZMLNode r = null,
+                c = null;
             for (int i = 0; i < parseList.Size(); i++)
             {
                 switch(parseList[i].t)
@@ -902,16 +998,16 @@ class ZXMLParser
                         {
                             // And that internal root has children, so insert into that tree
                             if(r.Children)
-                                r.Children.InsertNode(r.Children, Seed, fileName,
-                                    file.Stream[parseList[i].tagLine].Mid(parseList[i].tagStart, parseList[i].tagLength),
-                                    file.Stream[parseList[i].dataLine].Mid(parseList[i].dataStart, parseList[i].dataLength));
+                                c = r.Children.InsertNode(r.Children, Seed, fileName,
+                                        file.Stream[parseList[i].tagLine].Mid(parseList[i].tagStart, parseList[i].tagLength),
+                                        file.Stream[parseList[i].dataLine].Mid(parseList[i].dataStart, parseList[i].dataLength));
                             // First child on that tree
                             else
-                                r.Children = new("ZMLNode").Init(Seed, fileName,
-                                    file.Stream[parseList[i].tagLine].Mid(parseList[i].tagStart, parseList[i].tagLength),
-                                    file.Stream[parseList[i].dataLine].Mid(parseList[i].dataStart, parseList[i].dataLength));
+                                c = r.Children = new("ZMLNode").Init(Seed, fileName,
+                                        file.Stream[parseList[i].tagLine].Mid(parseList[i].tagStart, parseList[i].tagLength),
+                                        file.Stream[parseList[i].dataLine].Mid(parseList[i].dataStart, parseList[i].dataLength));
                         }
-                        // Rar - luckily this is handled fairly gracefully, DeleteNode can be called on the tree itself
+                        // Rar - luckily this is handled fairly gracefully, Delete can be called on the tree itself
                         // to just get rid of this entire thing.  Additional continuity checking would save the time getting here.
                         else
                         {
@@ -928,13 +1024,29 @@ class ZXMLParser
                             return;
                         }
                         break;
+                    case XMLToken.WORD_ATTRIBUTE:
+                        int lastWord = parseList[i - 1].t;
+                        if (lastWord == XMLToken.WORD_ROOT)
+                            r.Attributes.Push(new("ZMLAttribute").Init(file.Stream[parseList[i].tagLine].Mid(parseList[i].tagStart, parseList[i].tagLength),
+                                file.Stream[parseList[i].dataLine].Mid(parseList[i].dataStart, parseList[i].dataLength)));
+                        else
+                            c.Attributes.Push(new("ZMLAttribute").Init(file.Stream[parseList[i].tagLine].Mid(parseList[i].tagStart, parseList[i].tagLength),
+                                file.Stream[parseList[i].dataLine].Mid(parseList[i].dataStart, parseList[i].dataLength)));
+                        break;
                     // Ok if it's a root terminator, we need to find it's parent and make that be r.
+                    // This moves us back up in the tree, allowing roots to contain roots.
                     case XMLToken.WORD_TERMINATE:
+                        // Lets get the tag out of the stream - the token should have a line, start, and end
                         string term = file.Stream[parseList[i].tagLine].Mid(parseList[i].tagStart, parseList[i].tagLength);
+                        // Look through the tag list and find out if the type is none
                         for (int j = 0; j < TagList.Size(); j++)
                         {
+                            // Got a matching name, and the type is none, thats a root node.
                             if (term == TagList[j].Name && TagList[j].Type == ZMLTag.t_none)
-                            {} 
+                            {
+                                r = Root.FindParentNode(r.Weight, Root);
+                                break;
+                            }
                         }
                         break;
                 }

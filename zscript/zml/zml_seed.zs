@@ -12,7 +12,7 @@
     The ZMLSeed is either spawned by the EventHandler or placed by a map author,
     with the latter option existing to apply settings.
 
-    The ZMLSeed is the API that is used to access the ZMLTree.
+    The ZMLSeed is the API that is used to access the XML Tree.
 */
 class ZMLSeed : actor
 {
@@ -23,6 +23,8 @@ class ZMLSeed : actor
         radius 1;
     }
 
+    // This - as the class name implies - is the XML parser.
+    // The XML tree is in the parser, because of access reasons.
     ZXMLParser ZML;
 
     override void PostBeginPlay()
