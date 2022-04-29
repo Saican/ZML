@@ -6,12 +6,5 @@
 
 */
 
-tag "zml", "t_none"
-{
-    attributes
-    {
-        "namespace", "t_string";
-    }
-}
-
+tag "zml", "t_none";
 tag "include", "t_string";

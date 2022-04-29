@@ -78,11 +78,7 @@ What defines type?
 
 What ZML Does NOT Do:
 ---------------------
-	Anything relating to HTML.  Yes namespacing was originally created to avoid tag issues with
-	HTML; seriously who is gonna make a <table/> tag that goes alongside HTML that is also going
-	to read that same file?  Ok, rant about why not just enforcing strict naming and just breaking
-	things when users don't follow the rules, I mean this is half of why I write code, it breaks
-	if you don't do it right, so follow the rules or don't complain to me, ok, rant over.
+	Anything relating to HTML.
 
 				
 Established Syntax For ZML Files:
@@ -109,38 +105,6 @@ Established Syntax For ZML Files:
 	
 			<tag attributeName=dataOfType></tag>
 
-	Namespacing:
-		Namespaces allows naming conflicts to be resolved through prefixing.  ZML deviates slightly
-		from XML in this regard by alowing for two additional QOL features.  First, prefixes may
-		themselves be full strings, defined in ZMLDEFS, and also aliased.  Second, namespaces may
-		be established for entire projects through the "namespace" attribute of the <zml/> tag.
-
-		Inline prefixes within data:
-			<namespace:zml>data</zml>
-
-		Establishing a prefix in the root:
-			<zml namespace="stringName">data</zml>
-
-			Note that if this is done in the header file, all files will be included
-			under that namespace.
-
-		Can you create inline prefixes within global prefixes?  Absolutely.  This creates local prefixes!
-			<zml namespace="globalPrefix">
-				<.localPrefix:tag>data</tag>
-			</zml>
-
-				- NOTE!  The period ( . ) before the local prefix is required!
-			
-				Users use the full prefix when searching for elements:
-					FindElements("globalPrefix.localPrefix);
-				This returns a collection of of elements from the global namespace,
-				with the specified local namespace.
-
-		What namespacing allows for?
-			Besides name conflict resolution, namespacing allows project data to be isolated,
-			thus manipulated within the ZML tree more efficently as there is now a global
-			name with which to search for relevant data.
-
 
 Esablished Syntax for the ZMLDEFS Lump:
 ---------------------------------------
@@ -153,20 +117,6 @@ Esablished Syntax for the ZMLDEFS Lump:
 	Keywords - define block sections of the definition:
 		tag - a ZML tag.  This may be opened with brackets and further information added.
 		attribute - this defines the start of an attribute list that must be opened with brackets.
-
-	Flags - allow the parser to handle certain situations according to the meaning of the flag.
-		    Flags function as a means of error correction and customization.  The flags of the object
-			in the tree take precedence over any descendents unless otherwise specified.
-
-		addtype - this means if another tag is parsed with the same name, its data is added to this one, with possible overwrite, 
-				  to resolve the conflict.
-		overwrite - this means the conflict will be resolved by completely overwriting this tag with the incoming tag's data.
-		obeyincoming - this means the tag's flags are superseded by any incoming tag.  This tag's flags are obeyed if a
-					   conflicting tag does not specifiy means of conflict resolution.
-
-		Note that "addtype" and "overwrite" are mutually exclusive.  You can only do one or the other.
-		No conflict resolution flag implies strict resolution, which means the incoming tag is discarded as a likely copy,
-		or the base definition should not be modified.
 
 	Type Words - these result in an enumeration internally that determine what type the data is handled as.
 		These are written in double quotes, as strings:
@@ -204,8 +154,4 @@ Reserved Tags & Attributes:
 		<zml></zml> - this is the root tag that defines the file as ZML code
 		<include/> - this child tag is used only in ZML header files to direct the parser to 
 		     	     actual ZML data to interpret.
-	
-	Attributes:
-		namespace - type of string, this attribute is used within the <zml/> tag to identify
-			    that all further data within the file, or included files, is to be prefixed.
 
