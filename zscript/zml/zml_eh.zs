@@ -17,7 +17,7 @@ class ZMLHandler : EventHandler
     override void OnRegister()
     {
         // This mess creates the nice greeting ZML sends to the console.
-        ZMLVersion = "0.1";
+        ZMLVersion = "0.1.1";
         string greeting = "Greetings! I am the Z-xtensible Markup Language Parser Event System, ";
         string vers = "version: ";
         int greetlen = string.Format("%s%s%s", greeting, vers, ZMLVersion).Length();
