@@ -122,7 +122,23 @@ class StreamLine
                 {
                     // Have we found the encapsulator?
                     if (!e)
+                    {
                         e = LimitCheck(Line.Mid(i, 1), true);
+                        // Check the remaining line and see if we encounter the terminator
+                        // If not, do not set e
+                        if (e)
+                        {
+                            bool be = false;
+                            for (int j = i + 1; j < Line.Length(); j++)
+                            {
+                                if (LimitCheck(Line.Mid(j, 1), false))
+                                    be = true;
+                            }
+
+                            if (!be)
+                                e = false;
+                        }
+                    }
                     // Ok but we haven't found the terminator - look for it
                     else if (e && !t)
                         t = LimitCheck(Line.Mid(i, 1), false);
