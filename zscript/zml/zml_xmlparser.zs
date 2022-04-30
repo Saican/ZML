@@ -537,7 +537,7 @@ class ZXMLParser
                     int nextLine = file.PeekEnd(ct, XMLCharSet);
                     // If nextLine is -1 then the closing tag wasn't found
                     // So push unterminated tag error
-                    if (nextLine == -1)
+                    if (nextLine == -1 && file.ByteAt(file.Line, file.LineLength() - 2) != CHAR_ID_BACKSLASH)
                     {
                         ParseErrorList.Push(new("StreamError").Init(StreamError.ERROR_ID_UNCLOSEDTAG, 
                             file.LumpNumber, 
@@ -620,7 +620,7 @@ class ZXMLParser
                                 for (int m = 0; m < TagList[j].Attributes.Size(); m++)
                                 {
                                     // And there is it, actually valid, took i, j, k, and m to get here!
-                                    if (at == TagList[j].Attributes[m].Name)
+                                    if (at == TagList[j].Attributes[m].Name || (at.Length() == 1 ? (at.ByteAt(0) == CHAR_ID_BACKSLASH) : false))
                                     {
                                         ga = true;
                                         nh = k + 1;
@@ -709,7 +709,8 @@ class ZXMLParser
                     ts = file.Head,     // The start of the tag is wherever head is now
                     te = 0;             // The end can be 0 until we find it
 
-                bool ha = false;
+                bool ha = false,
+                    stt = false;
                 // Read the line from where Head is
                 for (int i = file.Head; i < file.LineLength(); i++)
                 {
@@ -717,10 +718,13 @@ class ZXMLParser
                     // So this whole thing checking the tag is dealing with false matches.  If two tags share the same
                     // words it can cause conflicts.  Attributes will also cause the tag to not be the right size.
                     // Stupid, stupid, attributes.
-                    if (file.ByteAt(file.Line, i) != CHAR_ID_GREATERTHAN)
+                    if (file.ByteAt(file.Line, i) != CHAR_ID_GREATERTHAN && file.ByteAt(file.Line, i) != CHAR_ID_BACKSLASH)
                         st.AppendFormat("%s", file.CharAt(file.Line, i));
                     else
                     {
+                        if (file.ByteAt(file.Line, file.LineLength() - 2) == CHAR_ID_BACKSLASH)
+                            stt = true;
+
                         // Check if the temp buffer contains a tag name
                         for (int j = 0; j < TagList.Size(); j++)
                         {
@@ -833,64 +837,78 @@ class ZXMLParser
                             // All we need to push is that it's a root token, and standard token info
                             parseList.Push(new("XMLToken").Init(XMLToken.WORD_ROOT, 
                                 tl, ts, te - ts + 1));
+                            if (!ha && stt)
+                                parseList.Push(new("XMLToken").Init(XMLToken.WORD_TERMINATE,
+                                    tl, ts, te - ts + 1));
                             break;
                         // Everything is a child and contains data - proceed with the stream witchcraft
                         default:
-                            // Should not get t_unknown - that is checked for in the def parser
-                            // So move things along to the end of the tag to begin picking up the data
-                            int tse = file.PeekEnd(">", XMLCharSet),
-                                dl = -1,    // Data line
-                                ds = -1,    // Data start
-                                de = 0;     // Data end
-                            // Oh my, PeekEnd you dirty thing, you return -1 if you fail
-                            if (tse > -1)
+                            if (!stt)
                             {
-                                dl = tse;
-                                ds = file.Head;
-                            }
+                                // Should not get t_unknown - that is checked for in the def parser
+                                // So move things along to the end of the tag to begin picking up the data
+                                int tse = file.PeekEnd(">", XMLCharSet),
+                                    dl = -1,    // Data line
+                                    ds = -1,    // Data start
+                                    de = 0;     // Data end
+                                // Oh my, PeekEnd you dirty thing, you return -1 if you fail
+                                if (tse > -1)
+                                {
+                                    dl = tse;
+                                    ds = file.Head;
+                                }
 
-                            // Right, got the data, get the terminator
-                            string ct = string.Format("</%s>", TagList[td].Name);
-                            // Yep, PeekEnd again, that function is just so darn handy
-                            int tee = file.PeekEnd(ct, XMLCharSet);
-                            // SHOULD not return -1, but check anyway
-                            if (tee > -1)
-                            {
-                                // This means the terminator is on its own line
+                                // Right, got the data, get the terminator
+                                string ct = string.Format("</%s>", TagList[td].Name);
+                                // Yep, PeekEnd again, that function is just so darn handy
+                                int tee = file.PeekEnd(ct, XMLCharSet);
+                                // SHOULD not return -1, but check anyway
+                                if (tee > -1)
+                                {
+                                    // This means the terminator is on its own line
+                                    if (tee - 1 != dl)
+                                        de = file.Stream[dl].Length() - 1;
+                                    // It's on the same line as everything else
+                                    else
+                                        de = file.Stream[dl].Length() - TagList[td].Name.Length() - 4; // there are three chars in the terminator tag, plus one for the index
+
+                                    // We need to pick up the next node or whatever
+                                    file.Line = tee;
+                                }
+
+                                // Got everything for the node token
+                                parseList.Push(new("XMLToken").Init(XMLToken.WORD_NODE,
+                                    tl, ts, te - ts + 1,
+                                    dl, ds, de - ds + 1));
+
+                                // Do the same check when figuring out where the data ends
+                                // This means the terminator is on its own line - perfectly valid XML
                                 if (tee - 1 != dl)
-                                    de = file.Stream[dl].Length() - 1;
+                                {
+                                    xl = tee - 1;
+                                    xs = 2;
+                                    xe = file.Stream[xl].Length() - 2;
+                                }
                                 // It's on the same line as everything else
                                 else
-                                    de = file.Stream[dl].Length() - TagList[td].Name.Length() - 4; // there are three chars in the terminator tag, plus one for the index
-
-                                // We need to pick up the next node or whatever
-                                file.Line = tee;
+                                {
+                                    xl = dl;
+                                    xs = file.Stream[xl].Length() - TagList[td].Name.Length() - 1;
+                                    xe = file.Stream[xl].Length() - 2;
+                                }
+                                // That's it - a terminator stores in the tag members
+                                if (!ha)
+                                    parseList.Push(new("XMLToken").Init(XMLToken.WORD_TERMINATE,
+                                        xl, xs, xe - xs + 1));
                             }
-
-                            // Got everything for the node token
-                            parseList.Push(new("XMLToken").Init(XMLToken.WORD_NODE,
-                                tl, ts, te - ts + 1,
-                                dl, ds, de - ds + 1));
-
-                            // Do the same check when figuring out where the data ends
-                            // This means the terminator is on its own line - perfectly valid XML
-                            if (tee - 1 != dl)
-                            {
-                                xl = tee - 1;
-                                xs = 2;
-                                xe = file.Stream[xl].Length() - 2;
-                            }
-                            // It's on the same line as everything else
                             else
                             {
-                                xl = dl;
-                                xs = file.Stream[xl].Length() - TagList[td].Name.Length() - 1;
-                                xe = file.Stream[xl].Length() - 2;
+                                parseList.Push(new("XMLToken").Init(XMLToken.WORD_NODE,
+                                    tl, ts, te - ts + 1));
+                                if (!ha)
+                                    parseList.Push(new("XMLToken").Init(XMLToken.WORD_TERMINATE,
+                                        tl, ts, te - ts + 1));
                             }
-                            // That's it - a terminator stores in the tag members
-                            if (!ha)
-                                parseList.Push(new("XMLToken").Init(XMLToken.WORD_TERMINATE,
-                                    xl, xs, xe - xs + 1));
                             break;
                     }
 
@@ -901,9 +919,19 @@ class ZXMLParser
                         parseList.Push(tempAtts[i]);
 
                         // If it's not a root node we need to terminate it manually
-                        if (TagList[td].Type != ZMLTag.t_none)
+                        if (TagList[td].Type != ZMLTag.t_none && !stt)
                             parseList.Push(new("XMLToken").Init(XMLToken.WORD_TERMINATE,
                                 xl, xs, xe - xs + 1));
+                        else if (stt)
+                        {
+                            console.printf("tag self terminates");
+                            parseList.Push(new("XMLToken").Init(XMLToken.WORD_TERMINATE,
+                                tl, ts, te - ts + 1));
+
+                            int sse = file.PeekEnd(">", XMLCharSet);
+                            if (sse != -1)
+                                file.Line = sse;
+                        }
                     }
                 }
                 // No, seriously, how did we get here?
