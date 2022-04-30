@@ -27,10 +27,12 @@ class ZMLSeed : actor
     // This - as the class name implies - is the XML parser.
     // The XML tree is in the parser, because of access reasons.
     ZXMLParser ZML;
+    bool Accessible;
 
     override void PostBeginPlay()
     {
         ZML = new("ZXMLParser").Init(new("ZMLTagParser").Init().TagList);
+        Accessible = true;
         super.PostBeginPlay();
     }
 

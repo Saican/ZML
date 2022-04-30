@@ -17,6 +17,7 @@
 class ZXMLParser
 {
     // ASCII constants of the valid syntax chars
+    const CHAR_ID_SPACE = 32;
     const CHAR_ID_EXCLAMATION = 33;
     const CHAR_ID_DOUBLEQUOTE = 34;
     const CHAR_ID_SINGLEQUOTE = 39;
@@ -32,6 +33,7 @@ class ZXMLParser
     ZMLCharset XMLCharSet;
     private void makeCharset()
     {
+        XMLCharSet.CodeChars.Push(CHAR_ID_SPACE);
         XMLCharSet.CodeChars.Push(CHAR_ID_EXCLAMATION);
         XMLCharSet.CodeChars.Push(CHAR_ID_DOUBLEQUOTE);
         XMLCharSet.CodeChars.Push(CHAR_ID_SINGLEQUOTE);
@@ -100,13 +102,17 @@ class ZXMLParser
         makeCharset();
 
         int Seed = Random();
+        array<ModeDelimiter> Modes;
+        Modes.Push(new("ModeDelimiter").Init("\"", "\""));
+        Modes.Push(new("ModeDelimiter").Init("\'", "\'"));
+        Modes.Push(new("ModeDelimiter").Init(">", "<"));
 
         // XML Parsing basically happens twice.
         // The translation files themselves are xml, 
         // thus the whole thing needs ran on those 
         // files to create a list of actually useful files.
         TranslationParseErrorCount = 0;
-        int transStreamSize = Generate_Streams();
+        int transStreamSize = Generate_Streams(Modes);
         for (int i = 0; i < transStreamSize; i++)
         {
             array<XMLToken> parseList;
@@ -129,7 +135,7 @@ class ZXMLParser
         }
 
         DefinitionParseErrorCount = 0;
-        int defStreamSize = Generate_DefinitionStreams();
+        int defStreamSize = Generate_DefinitionStreams(Modes);
         for (int i = 0; i < defStreamSize; i++)
         {
             array<XMLToken> parseList;
@@ -192,11 +198,11 @@ class ZXMLParser
     /* 
         Reads each translation unit
     */
-    private int Generate_Streams(int l = 0)
+    private int Generate_Streams(array<ModeDelimiter> Modes, int l = 0)
     {
         while ((l = Wads.FindLump("zml", l)) != -1)
         {
-            ReadLump(l, TranslationStreams);
+            ReadLump(l, TranslationStreams, Modes);
             l++;
         }
 
@@ -207,7 +213,7 @@ class ZXMLParser
     /*
         Reads each definition
     */
-    private int Generate_DefinitionStreams()
+    private int Generate_DefinitionStreams(array<ModeDelimiter> Modes)
     {
         // Find all the <include> nodes
         array<ZMLNode> transList;
@@ -218,7 +224,7 @@ class ZXMLParser
             if (l > -1)
             {
                 DefinitionNames.Push(GetFileName(transList[i].Data));
-                ReadLump(l, DefinitionStreams);
+                ReadLump(l, DefinitionStreams, Modes);
             }
         }
         console.printf(string.Format("\t\t\cdZML successfully read \cy%d \cdXML files into file streams!\n\t\t\t\t\cc- This means the files are in a parse-able format, it does not mean they are valid.\n\n", DefinitionStreams.Size()));
@@ -230,14 +236,14 @@ class ZXMLParser
         the whole process of reading the raw data
         is the same.
     */
-    private void ReadLump(int l, in out array<FileStream> Stream)
+    private void ReadLump(int l, in out array<FileStream> Stream, array<ModeDelimiter> Modes)
     {
         string rl = Wads.ReadLump(l);
         bool hs;
         int ds;
         [hs, ds] = HaveStream(FileStream.GetLumpHash(rl), Stream);
         if (!hs)
-            Stream.Push(new("FileStream").Init(rl, l));
+            Stream.Push(new("FileStream").Init(rl, l, Modes, StreamLine.SM_SELECTIVE));
         else
             console.printf(string.Format("\t\t\ciZML Warning! \ccNo big deal, but tried to read the same lump twice! Original lump # \ci%d\cc, duplicate lump # \ci%d", Stream[ds].LumpNumber, l));
     }
@@ -362,7 +368,7 @@ class ZXMLParser
                 }
             }
             // Nope invalid char error
-            else if (b != CHAR_ID_UNDERSCORE && !file.IsAlphaNum(b))
+            else if (b != CHAR_ID_SPACE && b != CHAR_ID_UNDERSCORE && !file.IsAlphaNum(b))
             {
                 // Nope, add invalid char to error list 
                 ParseErrorList.Push(new("StreamError").Init(StreamError.ERROR_ID_INVALIDCHAR, 

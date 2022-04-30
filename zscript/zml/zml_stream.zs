@@ -14,6 +14,15 @@
 */
 class StreamLine
 {
+    enum STREAMMODE
+    {
+        SM_NORMAL,
+        SM_SELECTIVE,
+        SM_OFF,
+    };
+
+    array<ModeDelimiter> Modes;
+
     int TrueLine;   // This is the actual line number in the file - for error output
 
     // Each character is stored as a string in the array - be nice to have actual chars
@@ -72,22 +81,72 @@ class StreamLine
         return f;
     }
 
+    private bool LimitCheck(string c, bool eot)
+    {
+        for (int i = 0; i < Modes.Size(); i++)
+        {
+            if (eot && c == Modes[i].Encapsulator)
+                return true;
+            else if (!eot && c == Modes[i].Terminator)
+                return true;
+        }
+
+        return false;
+    }
+
     /*
         Line constructor
 
         Generally, this system is set to remove whitespace,
         however if that isn't desired for some reason, set mode to true.
     */
-    StreamLine Init(string Line, int TrueLine, bool mode = false)
+    StreamLine Init(string Line, int TrueLine, array<ModeDelimiter> Modes, STREAMMODE mode = SM_NORMAL)
     {
         // Put each character of the string into the array - normally remove whitespace
+        bool limited = false,
+            e = false,
+            t = false;
+
+        if (Modes)
+            self.Modes.Copy(Modes);
+
         for (int i = 0; i < Line.Length(); i++)
         {
             int a = Line.ByteAt(i);
-            if (mode ? true : (a > 32 && a < 127))
+            // Is the mode normal? Check that the char is not whitespace, otherwise continue
+            // The check looks odd, but the only extra character we are only ever letting through is the space
+            if (mode == SM_NORMAL ? (a > 32 && a < 127) : (a >= 32 && a < 127))
             {
-                string c = Line.Mid(i, 1);
-                Chars.Push(c.MakeLower());
+                // The mode is selective - anything between delimiters is included
+                if (mode == SM_SELECTIVE)
+                {
+                    // Have we found the encapsulator?
+                    if (!e)
+                        e = LimitCheck(Line.Mid(i, 1), true);
+                    // Ok but we haven't found the terminator - look for it
+                    else if (e && !t)
+                        t = LimitCheck(Line.Mid(i, 1), false);
+
+                    // Ok we found the encapsulator, but not the terminator, we just read everything
+                    if (e && !t)
+                        limited = true;
+                    // That's the end of string that may need whitespace
+                    else if (e && t)
+                        limited = e = t = false;
+
+                    // If the lexer is limited, let spaces through, otherwise do the normal whitespace check
+                    if (limited ? (a >= 32 && a < 127) : (a > 32 && a < 127))
+                    {
+                        string c = Line.Mid(i, 1);
+                        Chars.Push(c.MakeLower());
+                    }
+                }
+                // It's either normal or off
+                else
+                {
+                    string c = Line.Mid(i, 1);
+                    Chars.Push(c.MakeLower());
+                }
             }
         }
 
@@ -97,6 +156,28 @@ class StreamLine
             return self;
         else
             return null;
+    }
+}
+
+/*
+    Making the filestream aware of whitespace
+    and default to removing it was wise.
+
+    But spaces are valid characters, sometimes,
+    in the XML, so handling of whitespace had
+    to be expanded.  This class is just a utility
+    class to allow the streamline to identify
+    poritions of its line that should still contain
+    spaces.
+*/
+class ModeDelimiter
+{
+    string Encapsulator, Terminator;
+    ModeDelimiter Init(string Encapsulator, string Terminator)
+    {
+        self.Encapsulator = Encapsulator;
+        self.Terminator = Terminator;
+        return self;
     }
 }
 
@@ -218,7 +299,7 @@ class FileStream
         Stream constructor
     
     */
-    FileStream Init(string RawLump, int LumpNumber, bool mode = false)
+    FileStream Init(string RawLump, int LumpNumber, array<ModeDelimiter> Modes = null, int mode = 0)
     {
         self.Reset();
         self.LumpNumber = LumpNumber;
@@ -234,7 +315,7 @@ class FileStream
                 l.AppendFormat("%s", n);
             else if (l.Length() > 0)
             {
-                StreamLine sl = new("StreamLine").Init(l, tln++, mode);
+                StreamLine sl = new("StreamLine").Init(l, tln++, Modes, mode);
                 if (sl)
                     Stream.Push(sl);
                 l = "";

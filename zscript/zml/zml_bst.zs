@@ -173,7 +173,7 @@ class ZMLNode
             if (w == Root.Children.Weight)
                 n = Root;
             else
-                n = Root.FindParentNode(w, Root.Children);
+                n = Root.Children.FindParentNode(w, Root.Children);
         }
 
         if (Root.LeftSibling)
@@ -181,7 +181,7 @@ class ZMLNode
             if (w == Root.LeftSibling.Weight)
                 n = Root;
             else
-                n = Root.FindParentNode(w, Root.LeftSibling);
+                n = Root.LeftSibling.FindParentNode(w, Root.LeftSibling);
         }
 
         if (Root.RightSibling)
@@ -189,7 +189,7 @@ class ZMLNode
             if (w == Root.RightSibling.Weight)
                 n = Root;
             else
-                n = Root.FindParentNode(w, Root.RightSibling);
+                n = Root.RightSibling.FindParentNode(w, Root.RightSibling);
         }
 
         return n;
@@ -213,6 +213,30 @@ class ZMLNode
         
         if (Root.RightSibling)
             Root.FindElements(Name, Root.RightSibling, Elements);
+    }
+
+    clearscope ZMLNode FindElement(string Name, in ZMLNode Root)
+    {
+        if (Root.Name == Name)
+            return Root;
+
+        ZMLNode n = null;
+        if (Root.LeftSibling)
+            n = Root.LeftSibling.FindElement(Name, Root.LeftSibling);
+        if (!n && Root.RightSibling)
+            n = Root.RightSibling.FindElement(Name, Root.RightSibling);
+
+        return n;
+    }
+
+    clearscope ZMLAttribute FindAttribute(string Name)
+    {
+        for (int i = 0; i < Attributes.Size(); i++)
+        {
+            if (Attributes[i].Name == Name)
+                return Attributes[i];
+        }
+        return null;
     }
 
     /* - END OF METHODS - */
