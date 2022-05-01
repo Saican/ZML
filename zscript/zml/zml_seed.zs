@@ -41,12 +41,12 @@ class ZMLSeed : actor
     */
     clearscope void FindElements_InFile(string FileName, string Name, in out array<ZMLNode> Elements)
     {
-        ZML.FindElements_InFile(FileName, Name, ZML.XMLTree, Elements);
+        ZML.FindElements_InFile(FileName, Name, Elements);
     }
 
     clearscope void FindElements(string Name, in out array<ZMLNode> Elements)
     {
-        ZML.FindElements(Name, ZML.XMLTree, Elements);
+        ZML.FindElements(Name, Elements);
     }
 
     clearscope ZMLNode FindFile(string FileName)

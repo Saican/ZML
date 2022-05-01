@@ -64,19 +64,24 @@ class ZXMLParser
     ZMLNode XMLTree;
 
     /*
-        Returns - through references - a collection of elements from the given file
+        Find Elements in File searches first for given file DOM and then returns
+        EVERY instance of the given node name
     */
-    clearscope void FindElements_InFile(string FileName, string Name, in ZMLNode Root, in out array<ZMLNode> Elements)
+    clearscope void FindElements_InFile(string FileName, string Name, in out array<ZMLNode> Elements)
     {
-        ZMLNode n = FindFile(FileName, Root);
+        ZMLNode n = FindFile(FileName, XMLTree);
         if (n)
             n.FindElements(Name, n.Children, Elements);
     }
 
-    clearscope void FindElements(string Name, in ZMLNode Root, in out array<ZMLNode> Elements) 
+    /*
+        Find Elements searches from the top of XMLTree and will return EVERY
+        instance of the given node name.
+    */
+    clearscope void FindElements(string Name, in out array<ZMLNode> Elements) 
     { 
         if (XmlTree) 
-            XmlTree.FindElements(Name, Root, Elements); 
+            XmlTree.FindElements(Name, XMLTree, Elements); 
     }
 
     /*
@@ -216,7 +221,7 @@ class ZXMLParser
     {
         // Find all the <include> nodes
         array<ZMLNode> transList;
-        FindElements("include", XMLTree, transList);
+        FindElements("include", transList);
         for (int i = 0; i < transList.Size(); i++)
         {
             int l = Wads.CheckNumForFullName(transList[i].Data);
@@ -862,8 +867,6 @@ class ZXMLParser
                                     dl = tse;
                                     ds = file.Head;
                                 }
-                                else
-                                    console.printf("TAG START END NOT FOUND!");
 
                                 // Right, got the data, get the terminator
                                 string ct = string.Format("</%s>", TagList[td].Name);
@@ -882,8 +885,6 @@ class ZXMLParser
                                     // We need to pick up the next node or whatever
                                     file.Line = tee;
                                 }
-                                else
-                                    console.printf("TAG TERMINATOR NOT FOUND!");
 
                                 // Got everything for the node token
                                 parseList.Push(new("XMLToken").Init(XMLToken.WORD_NODE,
@@ -1013,7 +1014,6 @@ class ZXMLParser
             // Root is ALWAYS the root node of the XML tree
             ZMLNode r = null,   // r is the "working root" - unless we get another root, this one gets all the children
                 c = null,       // c is the current child
-                d = null,       // d is the root node of the file - the DOM
                 t = null,       // t is the temp node used for checking things before assignment
                 p = null;       // p is the parent 
 
@@ -1049,9 +1049,6 @@ class ZXMLParser
                                 // There wasn't a root, so it gets assigned
                                 if (!Root)
                                     Root = t;
-                                // There wasn't a document node, so it gets assigned
-                                if (!d)
-                                    d = t;
                                 // Done with t for now
                                 t = null;
                             }
@@ -1129,10 +1126,8 @@ class ZXMLParser
                             // Got a matching name, and the type is none, thats a root node.
                             if (term == TagList[j].Name && TagList[j].Type == ZMLTag.t_none)
                             {
-                                console.printf(string.format("Root weight is: %d, Name is: %s, Main root is: %s, file: %s", r.Weight, r.Name, d.Name, d.FileName));
                                 r = p;
                                 // shouldn't need to null p, we don't check for it and just assign it above
-                                console.printf(string.format("New root weight is: %d", r ? r.Weight : 0));
                                 break;
                             }
                         }                   

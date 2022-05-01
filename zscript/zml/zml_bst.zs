@@ -170,13 +170,11 @@ class ZMLNode
             Elements.Push(Root);
 
         if (Root.Children)
-            Root.FindElements(Name, Root.Children, Elements);
-
+            Root.Children.FindElements(Name, Root.Children, Elements);
         if (Root.LeftSibling)
-            Root.FindElements(Name, Root.LeftSibling, Elements);
-        
+            Root.LeftSibling.FindElements(Name, Root.LeftSibling, Elements);
         if (Root.RightSibling)
-            Root.FindElements(Name, Root.RightSibling, Elements);
+            Root.RightSibling.FindElements(Name, Root.RightSibling, Elements);
     }
 
     clearscope ZMLNode FindElement(string Name, in ZMLNode Root)
