@@ -27,10 +27,12 @@ class ZMLSeed : actor
     // This - as the class name implies - is the XML parser.
     // The XML tree is in the parser, because of access reasons.
     ZXMLParser ZML;
+    bool Accessible;
 
     override void PostBeginPlay()
     {
         ZML = new("ZXMLParser").Init(new("ZMLTagParser").Init().TagList);
+        Accessible = true;
         super.PostBeginPlay();
     }
 
@@ -39,12 +41,12 @@ class ZMLSeed : actor
     */
     clearscope void FindElements_InFile(string FileName, string Name, in out array<ZMLNode> Elements)
     {
-        ZML.FindElements_InFile(FileName, Name, ZML.XMLTree, Elements);
+        ZML.FindElements_InFile(FileName, Name, Elements);
     }
 
     clearscope void FindElements(string Name, in out array<ZMLNode> Elements)
     {
-        ZML.FindElements(Name, ZML.XMLTree, Elements);
+        ZML.FindElements(Name, Elements);
     }
 
     clearscope ZMLNode FindFile(string FileName)

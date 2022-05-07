@@ -54,7 +54,7 @@ class ZMLNode
         Returns the Weight of the node
         by calling Hash and formatting the string
     */
-    int InsertWeight(string f, string n, string d) { return Hash(string.Format("%sz%sm%sl", f, n, d), Seed); }
+    private int InsertWeight(string f, string n, string d) { return Hash(string.Format("%sz%sm%sl", f, n, d), Seed); }
 
     /*
         Node constructor
@@ -64,7 +64,11 @@ class ZMLNode
         self.FileName = FileName;
         self.Name = Name;
         self.Data = Data;
-        self.Weight = Hash(string.Format("%sz%sm%sl", FileName, Name, Data), Seed);
+        int h = Hash(string.Format("%sz%sm%sl", FileName, Name, Data), Seed);
+        if (h < 0)
+            self.Weight = h * -1;
+        else
+            self.Weight = h;
         self.Seed = Seed;
         Children = LeftSibling = RightSibling = null;
         return self;
@@ -137,11 +141,11 @@ class ZMLNode
     {
         console.printf(string.format("ZMLNode, Name: %s, from file: %s, contains data: %s\n\tnode weight: %d\n\tnode has children: %s, root child name: %s\n\tnode has left sibling: %s, left sibling name: %s\n\tnode has right sibling: %s, right sibling name: %s\n\n",
             Name, FileName, Data, Weight,
-            Children ? "yes" : "no",
+            Children ? string.Format("yes (root weight: %d)", Children.Weight) : "no",
             Children ? Children.Name : "N/A",
-            LeftSibling ? "yes" : "no",
+            LeftSibling ? string.Format("yes (root weight: %d)", LeftSibling.Weight) : "no",
             LeftSibling ? LeftSibling.Name : "N/A",
-            RightSibling ? "yes" : "no",
+            RightSibling ? string.Format("yes (root weight: %d)", RightSibling.Weight) : "no",
             RightSibling ? RightSibling.Name : "N/A"));
 
         for (int i = 0; i < Attributes.Size(); i++)
@@ -156,46 +160,6 @@ class ZMLNode
     }
 
     /*
-        Returns the node who is the ancestor
-        of the node with the given weight.
-        The tree is one way so all searching is
-        from the top.
-    */
-    clearscope ZMLNode FindParentNode(int w, in out ZMLNode Root)
-    {
-        if (w == Root.Weight)
-            return null;
-
-        ZMLNode n;
-
-        if (Root.Children)
-        {
-            if (w == Root.Children.Weight)
-                n = Root;
-            else
-                n = Root.FindParentNode(w, Root.Children);
-        }
-
-        if (Root.LeftSibling)
-        {
-            if (w == Root.LeftSibling.Weight)
-                n = Root;
-            else
-                n = Root.FindParentNode(w, Root.LeftSibling);
-        }
-
-        if (Root.RightSibling)
-        {
-            if (w == Root.RightSibling.Weight)
-                n = Root;
-            else
-                n = Root.FindParentNode(w, Root.RightSibling);
-        }
-
-        return n;
-    }
-
-    /*
         Returns a collection of elements
         matching the given name.  Searching
         will begin at the given root.
@@ -206,13 +170,35 @@ class ZMLNode
             Elements.Push(Root);
 
         if (Root.Children)
-            Root.FindElements(Name, Root.Children, Elements);
-
+            Root.Children.FindElements(Name, Root.Children, Elements);
         if (Root.LeftSibling)
-            Root.FindElements(Name, Root.LeftSibling, Elements);
-        
+            Root.LeftSibling.FindElements(Name, Root.LeftSibling, Elements);
         if (Root.RightSibling)
-            Root.FindElements(Name, Root.RightSibling, Elements);
+            Root.RightSibling.FindElements(Name, Root.RightSibling, Elements);
+    }
+
+    clearscope ZMLNode FindElement(string Name, in ZMLNode Root)
+    {
+        if (Root.Name == Name)
+            return Root;
+
+        ZMLNode n = null;
+        if (Root.LeftSibling)
+            n = Root.LeftSibling.FindElement(Name, Root.LeftSibling);
+        if (!n && Root.RightSibling)
+            n = Root.RightSibling.FindElement(Name, Root.RightSibling);
+
+        return n;
+    }
+
+    clearscope ZMLAttribute FindAttribute(string Name)
+    {
+        for (int i = 0; i < Attributes.Size(); i++)
+        {
+            if (Attributes[i].Name == Name)
+                return Attributes[i];
+        }
+        return null;
     }
 
     /* - END OF METHODS - */

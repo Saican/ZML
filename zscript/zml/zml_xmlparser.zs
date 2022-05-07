@@ -17,6 +17,7 @@
 class ZXMLParser
 {
     // ASCII constants of the valid syntax chars
+    const CHAR_ID_SPACE = 32;
     const CHAR_ID_EXCLAMATION = 33;
     const CHAR_ID_DOUBLEQUOTE = 34;
     const CHAR_ID_SINGLEQUOTE = 39;
@@ -32,6 +33,7 @@ class ZXMLParser
     ZMLCharset XMLCharSet;
     private void makeCharset()
     {
+        XMLCharSet.CodeChars.Push(CHAR_ID_SPACE);
         XMLCharSet.CodeChars.Push(CHAR_ID_EXCLAMATION);
         XMLCharSet.CodeChars.Push(CHAR_ID_DOUBLEQUOTE);
         XMLCharSet.CodeChars.Push(CHAR_ID_SINGLEQUOTE);
@@ -62,19 +64,24 @@ class ZXMLParser
     ZMLNode XMLTree;
 
     /*
-        Returns - through references - a collection of elements from the given file
+        Find Elements in File searches first for given file DOM and then returns
+        EVERY instance of the given node name
     */
-    clearscope void FindElements_InFile(string FileName, string Name, in ZMLNode Root, in out array<ZMLNode> Elements)
+    clearscope void FindElements_InFile(string FileName, string Name, in out array<ZMLNode> Elements)
     {
-        ZMLNode n = FindFile(FileName, Root);
+        ZMLNode n = FindFile(FileName, XMLTree);
         if (n)
             n.FindElements(Name, n.Children, Elements);
     }
 
-    clearscope void FindElements(string Name, in ZMLNode Root, in out array<ZMLNode> Elements) 
+    /*
+        Find Elements searches from the top of XMLTree and will return EVERY
+        instance of the given node name.
+    */
+    clearscope void FindElements(string Name, in out array<ZMLNode> Elements) 
     { 
         if (XmlTree) 
-            XmlTree.FindElements(Name, Root, Elements); 
+            XmlTree.FindElements(Name, XMLTree, Elements); 
     }
 
     /*
@@ -99,14 +106,19 @@ class ZXMLParser
         // character sets establish the language syntax.
         makeCharset();
 
-        int Seed = Random();
+        // This allows the file stream to allow spaces between certain delimiters
+        // Those delimiters have to be specified, called the Encapsulator and the Terminator.
+        array<ModeDelimiter> Modes;
+        Modes.Push(new("ModeDelimiter").Init("\"", "\""));
+        Modes.Push(new("ModeDelimiter").Init("\'", "\'"));
+        Modes.Push(new("ModeDelimiter").Init(">", "<"));
 
         // XML Parsing basically happens twice.
         // The translation files themselves are xml, 
         // thus the whole thing needs ran on those 
         // files to create a list of actually useful files.
         TranslationParseErrorCount = 0;
-        int transStreamSize = Generate_Streams();
+        int transStreamSize = Generate_Streams(Modes);
         for (int i = 0; i < transStreamSize; i++)
         {
             array<XMLToken> parseList;
@@ -116,7 +128,6 @@ class ZXMLParser
             {
                 Tokenize(TranslationStreams[i], TagList, parseList, TranslationParseErrorList, TranslationParseErrorCount);
                 Parse(TranslationStreams[i], 
-                    Seed,
                     "zml", 
                     TagList, 
                     parseList, 
@@ -129,7 +140,7 @@ class ZXMLParser
         }
 
         DefinitionParseErrorCount = 0;
-        int defStreamSize = Generate_DefinitionStreams();
+        int defStreamSize = Generate_DefinitionStreams(Modes);
         for (int i = 0; i < defStreamSize; i++)
         {
             array<XMLToken> parseList;
@@ -139,7 +150,6 @@ class ZXMLParser
             {
                 Tokenize(DefinitionStreams[i], TagList, parseList, DefinitionParseErrorList, DefinitionParseErrorCount);
                 Parse(DefinitionStreams[i], 
-                    Seed,
                     DefinitionNames[i], 
                     TagList, 
                     parseList, 
@@ -159,8 +169,8 @@ class ZXMLParser
         if (DefinitionParseErrorCount > 0)
             ErrorOutput(DefinitionParseErrorList, DefinitionParseErrorCount, "definition");
 
-        //if (XMLTree)
-            //XMLTree.NodeOut();
+        if (XMLTree)
+            XMLTree.NodeOut();
 
         return self;
     }
@@ -192,11 +202,11 @@ class ZXMLParser
     /* 
         Reads each translation unit
     */
-    private int Generate_Streams(int l = 0)
+    private int Generate_Streams(array<ModeDelimiter> Modes, int l = 0)
     {
         while ((l = Wads.FindLump("zml", l)) != -1)
         {
-            ReadLump(l, TranslationStreams);
+            ReadLump(l, TranslationStreams, Modes);
             l++;
         }
 
@@ -207,18 +217,18 @@ class ZXMLParser
     /*
         Reads each definition
     */
-    private int Generate_DefinitionStreams()
+    private int Generate_DefinitionStreams(array<ModeDelimiter> Modes)
     {
         // Find all the <include> nodes
         array<ZMLNode> transList;
-        FindElements("include", XMLTree, transList);
+        FindElements("include", transList);
         for (int i = 0; i < transList.Size(); i++)
         {
             int l = Wads.CheckNumForFullName(transList[i].Data);
             if (l > -1)
             {
                 DefinitionNames.Push(GetFileName(transList[i].Data));
-                ReadLump(l, DefinitionStreams);
+                ReadLump(l, DefinitionStreams, Modes);
             }
         }
         console.printf(string.Format("\t\t\cdZML successfully read \cy%d \cdXML files into file streams!\n\t\t\t\t\cc- This means the files are in a parse-able format, it does not mean they are valid.\n\n", DefinitionStreams.Size()));
@@ -230,14 +240,14 @@ class ZXMLParser
         the whole process of reading the raw data
         is the same.
     */
-    private void ReadLump(int l, in out array<FileStream> Stream)
+    private void ReadLump(int l, in out array<FileStream> Stream, array<ModeDelimiter> Modes)
     {
         string rl = Wads.ReadLump(l);
         bool hs;
         int ds;
         [hs, ds] = HaveStream(FileStream.GetLumpHash(rl), Stream);
         if (!hs)
-            Stream.Push(new("FileStream").Init(rl, l));
+            Stream.Push(new("FileStream").Init(rl, l, Modes, StreamLine.SM_SELECTIVE));
         else
             console.printf(string.Format("\t\t\ciZML Warning! \ccNo big deal, but tried to read the same lump twice! Original lump # \ci%d\cc, duplicate lump # \ci%d", Stream[ds].LumpNumber, l));
     }
@@ -362,7 +372,7 @@ class ZXMLParser
                 }
             }
             // Nope invalid char error
-            else if (b != CHAR_ID_UNDERSCORE && !file.IsAlphaNum(b))
+            else if (b != CHAR_ID_SPACE && b != CHAR_ID_UNDERSCORE && !file.IsAlphaNum(b))
             {
                 // Nope, add invalid char to error list 
                 ParseErrorList.Push(new("StreamError").Init(StreamError.ERROR_ID_INVALIDCHAR, 
@@ -924,7 +934,6 @@ class ZXMLParser
                                 xl, xs, xe - xs + 1));
                         else if (stt)
                         {
-                            console.printf("tag self terminates");
                             parseList.Push(new("XMLToken").Init(XMLToken.WORD_TERMINATE,
                                 tl, ts, te - ts + 1));
 
@@ -960,7 +969,7 @@ class ZXMLParser
         // Not really needed at this point but just good manners
         file.Reset();
         // If in doubt uncomment this
-        //TokenListOut(file, parseList);
+        TokenListOut(file, parseList);
     }
 
     /*
@@ -993,7 +1002,7 @@ class ZXMLParser
         Turn it into the XML tree.
         Finally.
     */
-    private void Parse(in out FileStream file, int Seed, string fileName, 
+    private void Parse(in out FileStream file, string fileName, 
         in array<ZMLTag> TagList, 
         in out array<XMLToken> parseList, 
         in out ZMLNode Root, 
@@ -1002,55 +1011,82 @@ class ZXMLParser
     {
         if (parseList.Size() > 0)
         {
-            ZMLNode r = null,
-                c = null;
+            // Root is ALWAYS the root node of the XML tree
+            ZMLNode r = null,   // r is the "working root" - unless we get another root, this one gets all the children
+                c = null,       // c is the current child
+                t = null,       // t is the temp node used for checking things before assignment
+                p = null;       // p is the parent 
+
+            int NodeWord;
+
             for (int i = 0; i < parseList.Size(); i++)
             {
-                switch(parseList[i].t)
+                if (parseList[i].t <= XMLToken.WORD_NODE)
+                    NodeWord = parseList[i].t;
+
+                switch (parseList[i].t)
                 {
-                    // Create a node that contains other nodes
-                    case XMLToken.WORD_ROOT:
-                        // We do not have an internal root node
+                    case XMLToken.WORD_ROOT:    
+                        // We don't have a working root
                         if (!r)
                         {
-                            // We do have a root, we can insert on it
+                            // We do have a Tree, so insert on it
                             if (Root)
-                                r = Root.InsertNode(Root, Seed, fileName,
+                                t = Root.InsertNode(Root, Random(), fileName,
                                         file.Stream[parseList[i].tagLine].Mid(parseList[i].tagStart, parseList[i].tagLength),
                                         "");
-                            // No root either, so make a root
+                            // No Tree either so gotta start someplace
                             else
-                                r = Root = new("ZMLNode").Init(Seed, fileName,
+                                t = new("ZMLNode").Init(Random(), fileName,
                                         file.Stream[parseList[i].tagLine].Mid(parseList[i].tagStart, parseList[i].tagLength),
                                         "");
+
+                            // Made a temp node
+                            if (t)
+                            {
+                                // No r, so it gets assigned
+                                r = t;
+                                // There wasn't a root, so it gets assigned
+                                if (!Root)
+                                    Root = t;
+                                // Done with t for now
+                                t = null;
+                            }
+                            // lack of t is gonna be a VM aborting issue, so there's nothing I can do here
                         }
-                        // We do have a root, so this needs to be a child node, check if we have children and insert on that tree
+                        // We do, and it has children, so insert into that tree
                         else if (r.Children)
-                            r = r.Children.InsertNode(r.Children, Seed, fileName,
+                        {
+                            t = r.Children.InsertNode(r.Children, Random(), fileName,
                                     file.Stream[parseList[i].tagLine].Mid(parseList[i].tagStart, parseList[i].tagLength),
                                     "");
-                        // Nope, first child
+                            p = r;  // parent becomes current working root
+                            r = t;  // working root becomes temp
+                            t = null;   // discard temp
+                        }
+                        // Don't even have kids yet
                         else
-                            r = r.Children = new("ZMLNode").Init(Seed, fileName, 
+                        {
+                            t = r.Children = new("ZMLNode").Init(Random(), fileName, 
                                     file.Stream[parseList[i].tagLine].Mid(parseList[i].tagStart, parseList[i].tagLength),
                                     "");
+                            p = r;
+                            r = t;
+                            t = null;
+                        }
                         break;
-                    // Create a node that will contain data
                     case XMLToken.WORD_NODE:
-                        // The last and most problematic error - nodes outside of roots - I may fix for this to save processing
-                        // But I can already forsee it being its own clusterfuck continuity check addon.
-                        //
-                        // So we do have an interal root
+                        // Need a working root, otherwise this node is clearly outside of the established structure
                         if (r)
                         {
                             // And that internal root has children, so insert into that tree
                             if(r.Children)
-                                c = r.Children.InsertNode(r.Children, Seed, fileName,
+                                c = r.Children.InsertNode(r.Children, Random(), fileName,
                                         file.Stream[parseList[i].tagLine].Mid(parseList[i].tagStart, parseList[i].tagLength),
                                         file.Stream[parseList[i].dataLine].Mid(parseList[i].dataStart, parseList[i].dataLength));
                             // First child on that tree
                             else
-                                c = r.Children = new("ZMLNode").Init(Seed, fileName,
+                                c = r.Children = new("ZMLNode").Init(Random(), fileName,
                                         file.Stream[parseList[i].tagLine].Mid(parseList[i].tagStart, parseList[i].tagLength),
                                         file.Stream[parseList[i].dataLine].Mid(parseList[i].dataStart, parseList[i].dataLength));
                         }
@@ -1072,16 +1108,15 @@ class ZXMLParser
                         }
                         break;
                     case XMLToken.WORD_ATTRIBUTE:
-                        int lastWord = parseList[i - 1].t;
-                        if (lastWord == XMLToken.WORD_ROOT)
+                        // Do we need to push to the working root or one of it's kids?
+                        if (NodeWord == XMLToken.WORD_ROOT)
                             r.Attributes.Push(new("ZMLAttribute").Init(file.Stream[parseList[i].tagLine].Mid(parseList[i].tagStart, parseList[i].tagLength),
                                 file.Stream[parseList[i].dataLine].Mid(parseList[i].dataStart, parseList[i].dataLength)));
+                        // One of the kids
                         else
                             c.Attributes.Push(new("ZMLAttribute").Init(file.Stream[parseList[i].tagLine].Mid(parseList[i].tagStart, parseList[i].tagLength),
                                 file.Stream[parseList[i].dataLine].Mid(parseList[i].dataStart, parseList[i].dataLength)));
                         break;
-                    // Ok if it's a root terminator, we need to find it's parent and make that be r.
-                    // This moves us back up in the tree, allowing roots to contain roots.
                     case XMLToken.WORD_TERMINATE:
                         // Lets get the tag out of the stream - the token should have a line, start, and end
                         string term = file.Stream[parseList[i].tagLine].Mid(parseList[i].tagStart, parseList[i].tagLength);
@@ -1091,10 +1126,11 @@ class ZXMLParser
                             // Got a matching name, and the type is none, thats a root node.
                             if (term == TagList[j].Name && TagList[j].Type == ZMLTag.t_none)
                             {
-                                r = Root.FindParentNode(r.Weight, Root);
+                                r = p;
+                                // shouldn't need to null p, we don't check for it and just assign it above
                                 break;
                             }
-                        }
+                        }                   
                         break;
                 }
             }
